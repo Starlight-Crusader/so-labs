@@ -1,0 +1,27 @@
+section .data
+    to_write1_str   dd "@@@FAF-211 Anastasia CUNEV###"
+    to_write1_len   equ $ - to_write2_str - 1
+
+    first_track1    equ 18 ; 331 = 18 (sectors per track) * 18 + 7
+    first_sector1   equ 8  ; (7 -> 8)
+
+    last_track1     equ 20 ; 360 = 18 (sectors per track) * 20 + 0
+    last_sector1    equ 1  ; (0 -> 1)
+
+    to_write2_str   dd "@@@FAF-211 Mike ECHIM###"
+    to_write2_len   equ $ - to_write3_str - 1
+
+    first_track1    equ 21 ; 391 = 18 (sectors per track) * 21 + 13
+    first_sector1   equ 14 ; (13 -> 14)
+
+    last_track1     equ 23 ; 360 = 18 (sectors per track) * 23 + 6
+    last_sector1    equ 7  ; (6 -> 7)
+
+    to_write_str3   dd "@@@FAF-211 Arteom KALAMAGHIN###"
+    to_write_len3   equ $ - to_write_str - 1
+
+    first_track3    equ 28  ; 511 = 18 (sectors per track) * 28 + 7
+    first_sector3   equ 8   ; 7 -> 8
+
+    last_track3     equ 30  ; 540 = 18 (sectors per track) * 30 + 0
+    last_sector3    equ 1   ; 0 -> 1

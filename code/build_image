@@ -8,6 +8,11 @@ fi
 filename="$1"
 ext1=".asm"
 ext2=".com"
+backup_dir_name="backup/"
+
+if [ ! -d "$backup_dir_name" ]; then
+	mkdir "$backup_dir_name"
+fi
 
 cp "$filename$ext1" backup/
 rm -f "floppy.img"

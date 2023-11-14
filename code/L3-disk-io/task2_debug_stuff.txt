@@ -1,0 +1,29 @@
+option1:
+    push    31h
+    push    54h
+    push    50h
+    push    4fh
+
+    mov     cx, 4
+
+    jmp     print_stack
+
+option2:
+    push    32h
+    push    54h
+    push    50h
+    push    4fh
+
+    mov     cx, 4
+
+    jmp     print_stack
+
+option3:
+    push    33h
+    push    54h
+    push    50h
+    push    4fh
+
+    mov     cx, 4
+
+    jmp     print_stack
