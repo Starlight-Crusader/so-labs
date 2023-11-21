@@ -37,7 +37,12 @@ _start:
     cmp     al, '1'
     je      option1
 
+    cmp     al, '2'
+    je      option2
+
     jmp     _error
+
+; 2.1 BEGINNING
 
 option1:
 
@@ -60,10 +65,10 @@ option1:
 
     mov     ax, 0
     mov     es, ax
-    mov     bp, in_awaits_str
+    mov     bp, in_awaits_str1
 
     mov     bl, 07h
-    mov     cx, in_await_len1
+    mov     cx, str1_awaits_len1
 
     mov     ax, 1301h
     int     10h
@@ -71,7 +76,7 @@ option1:
     ; read user input (str)
 
     call    read_in
-    ; call    print_in_buff
+    ; ; call    print_in_buff
 
     ; save the string to its own buffer
 
@@ -98,12 +103,12 @@ option1:
 
     mov     ax, 0
     mov     es, ax
-    mov     si, in_awaits_str
-    add     si, in_await_len1
+    mov     si, in_awaits_str1
+    add     si, str1_awaits_len1
     mov     bp, si
 
     mov     bl, 07h
-    mov     cx, in_await_len2
+    mov     cx, str1_awaits_len2
 
     mov     ax, 1301h
     int     10h
@@ -111,7 +116,7 @@ option1:
     ; read user input (n)
 
     call    read_in
-    call    print_in_buff
+    ; call    print_in_buff
 
     ; convert ascii read to an integer
 
@@ -130,13 +135,13 @@ option1:
 
     mov     ax, 0
     mov     es, ax
-    mov     si, in_awaits_str
-    add     si, in_await_len1
-    add     si, in_await_len2
+    mov     si, in_awaits_str1
+    add     si, str1_awaits_len1
+    add     si, str1_awaits_len2
     mov     bp, si
 
     mov     bl, 07h
-    mov     cx, in_await_len3
+    mov     cx, str1_awaits_len3
 
     mov     ax, 1301h
     int     10h
@@ -152,7 +157,7 @@ option1:
     ; read user input (h)
 
     call    read_in
-    call    print_in_buff
+    ; call    print_in_buff
 
     mov     ah, 02h
     inc     dh
@@ -168,7 +173,7 @@ option1:
     ; read user input (t)
 
     call    read_in
-    call    print_in_buff
+    ; call    print_in_buff
 
     mov     ah, 02h
     inc     dh
@@ -184,7 +189,7 @@ option1:
     ; read user input (s)
 
     call    read_in
-    call    print_in_buff
+    ; call    print_in_buff
 
     mov     ah, 02h
     inc     dh
@@ -217,6 +222,53 @@ option1:
 
     int     13h
     jc      _error
+
+    jmp     _terminate
+
+; 2.2 BEGINNING
+
+option2:
+    ; display the key read
+
+    mov     ah, 0eh
+    int     10h
+
+    mov     al, 2eh
+    int     10h
+
+    ; print "SEGMENT (XXXX) = "
+
+    mov     ah, 03h
+    mov     bh, 0
+    int     10h
+
+    inc     dh
+    mov     dl, 0
+
+    mov     ax, 0
+    mov     es, ax
+    mov     bp, in_awaits_str2
+
+    mov     bl, 07h
+    mov     cx, str2_awaits_len1
+
+    mov     ax, 1301h
+    int     10h
+
+    ; read user input (segment)
+
+    call    read_in
+    ; ; call    print_in_buff
+
+    ; convert ascii read to a hex
+
+    mov     di, address
+    mov     si, in_buffer
+    call    atoh
+
+    ; check conversion
+
+    call    conv_check
 
     jmp     _terminate
 
@@ -288,25 +340,58 @@ read_in:
 
         ret
 
+; In. number conversions
+
 atoi:
-    conv_loop:
+    atoi_conv_loop:
         cmp     byte [si], 0
-        je      conv_done
+        je      atoi_conv_done
 
-        mov     ax, [si]
-        sub     ax, '0'
+        mov     al, [si]
+        sub     al, '0'
 
-        mov     bx, [di]
+        mov     bl, [di]
         imul    bx, 10
         add     bx, ax
-        mov     [di], bx
+        mov     [di], bl
 
         inc     si
 
-        jmp     conv_loop
+        jmp     atoi_conv_loop
 
-    conv_done:
+    atoi_conv_done:
         ret
+
+atoh:
+    atoh_conv_loop:
+        cmp     byte [si], 0
+        je      atoh_conv_done
+
+        mov     al, [si]
+        cmp     al, 65
+        jl      conv_digit  
+
+        conv_letter:
+            sub     al, 55
+            jmp     atoh_finish_iteration
+
+        conv_digit:
+            sub     al, 48
+
+        atoh_finish_iteration:
+            mov     bl, [di]
+            imul    bx, 16
+            add     bx, ax
+            mov     [di], bl
+
+            inc     si
+
+        jmp     atoh_conv_loop
+
+    atoh_conv_done:
+        ret
+
+; With this subprocess, copy the string n times in a separate buffer to write on floppy
 
 fill_write_buffer:
     push    si
@@ -356,6 +441,8 @@ fill_write_buffer:
     return:
         ret
 
+; Trailer subprocesses
+
 _error:
     push    52h
     push    52h
@@ -385,6 +472,8 @@ _terminate:
 
     jmp     _start
 
+; Debug subprocesses
+
 conv_check:
     mov     ah, 0eh
     mov     al, 20h
@@ -408,7 +497,7 @@ conv_check:
     push    word [di]
     
     mov     ah, 0eh
-    add     word [di], 38
+    ; add     word [di], 38
     mov     al, [di]
     int     10h
 
@@ -450,17 +539,24 @@ print_in_buff:
 
     ret
 
+; Data declaration and initialization
+
 section .data
     opt_str             dd "1. KBD-->FLP | 2. FLP-->RAM | 3. RAM-->FLP"
     opt_len             equ 42
 
-    in_awaits_str       dd "STRING = N = {H, T, S} (one value per line)"
-    in_await_len1       equ 9
-    in_await_len2       equ 4
-    in_await_len3       equ 30
+    in_awaits_str1       dd "STRING = N = {H, T, S} (one value per line)"
+    str1_awaits_len1     equ 9
+    str1_awaits_len2     equ 4
+    str1_awaits_len3     equ 30
 
+    in_awaits_str2       dd "SEGMENT (XXXX) = OFFSET (YYYY) = "
+    str2_awaits_len1     equ 17
+    str2_awaits_len2     equ 16
+    
 section .bss
     write_buffer    resb 512
     in_buffer       resb 256
     string          resb 256
     nhts            resb 8
+    address         resb 4
