@@ -76,7 +76,6 @@ option1:
     ; read user input (str)
 
     call    read_in
-    ; ; call    print_in_buff
 
     ; save the string to its own buffer
 
@@ -116,7 +115,6 @@ option1:
     ; read user input (n)
 
     call    read_in
-    ; call    print_in_buff
 
     ; convert ascii read to an integer
 
@@ -150,22 +148,11 @@ option1:
     mov     al, 3ah
     int     10h
 
-    mov     ah, 
-
-    mov     ah, 02h
-    inc     dh
-    mov     al, 0
-    int     10h
+    call    break_line
 
     ; read user input (h)
 
     call    read_in
-    ; call    print_in_buff
-
-    mov     ah, 02h
-    inc     dh
-    mov     dl, 0
-    int     10h
 
     ; convert ascii read to an integer
 
@@ -173,15 +160,11 @@ option1:
     mov     si, in_buffer
     call    atoi
 
+    call    break_line
+
     ; read user input (t)
 
     call    read_in
-    ; call    print_in_buff
-
-    mov     ah, 02h
-    inc     dh
-    mov     dl, 0
-    int     10h
 
     ; convert ascii read to an integer
 
@@ -189,21 +172,19 @@ option1:
     mov     si, in_buffer
     call    atoi
 
+    call    break_line
+
     ; read user input (s)
 
     call    read_in
-    ; call    print_in_buff
-
-    mov     ah, 02h
-    inc     dh
-    mov     dl, 0
-    int     10h
 
     ; convert ascii read to an integer
 
     mov     di, nhts + 6
     mov     si, in_buffer
     call    atoi
+
+    call    break_line
 
     ; prepare writing buffer
 
@@ -274,6 +255,8 @@ option2:
     call    conv_check
 
     jmp     _terminate
+
+; Keyboard reading subprocess
 
 read_in:
     mov     si, in_buffer
@@ -453,10 +436,12 @@ break_line:
 
     mov     ah, 02h
     inc     dh
-    mov     al, 0
+    mov     dl, 0
     int     10h
 
     ret
+
+; HTS reading subprocess
 
 ; Trailer subprocesses
 
