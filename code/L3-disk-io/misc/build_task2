@@ -1,0 +1,16 @@
+#!/bin/bash
+
+if [ ! -d backup/ ]; then
+    mkdir backup/
+fi
+cp task2.asm backup/
+
+rm -f floppy.img
+
+nasm -f bin -o task2_boot.com task2_boot.asm
+truncate -s 1474560 task2_boot.com
+mv task2_boot.com floppy.img
+
+nasm -f bin -o task2.com task2.asm
+dd if=task2.com of=floppy.img bs=512 seek=1 conv=notrunc
+rm -f task2.com
