@@ -8,9 +8,7 @@ _start:
 
     ; print options listing string
 
-    mov     ah, 03h
-    mov     bh, 0
-    int     10h
+    call    get_cursor_pos
 
     mov     ax, 0
     mov     es, ax
@@ -34,6 +32,18 @@ _start:
     mov     ah, 00h
     int     16h
 
+    ; display the key read
+
+    mov     ah, 0eh
+    int     10h
+    
+    push    ax
+
+    mov     al, 2eh
+    int     10h
+
+    pop     ax
+
     ; execute chosen operation
 
     cmp     al, '1'
@@ -50,20 +60,9 @@ _start:
 ; 2.1 BEGINNING
 
 option1:
-
-    ; display the key read
-
-    mov     ah, 0eh
-    int     10h
-
-    mov     al, 2eh
-    int     10h
-
     ; print "STRING = "
 
-    mov     ah, 03h
-    mov     bh, 0
-    int     10h
+    call    get_cursor_pos
 
     inc     dh
     mov     dl, 0
@@ -80,7 +79,7 @@ option1:
 
     ; read user input (str)
 
-    call    read_in
+    call    read_input
 
     ; save the string to its own buffer
 
@@ -98,9 +97,7 @@ option1:
 
     ; print "N = "
 
-    mov     ah, 03h
-    mov     bh, 0
-    int     10h
+    call    get_cursor_pos
 
     inc     dh
     mov     dl, 0
@@ -119,7 +116,7 @@ option1:
 
     ; read user input (n)
 
-    call    read_in
+    call    read_input
 
     ; convert ascii read to an integer
 
@@ -129,7 +126,7 @@ option1:
 
     ; read HTS
 
-    call    read_hts
+    call    read_hts_address
 
     ; prepare writing buffer
 
@@ -157,77 +154,13 @@ option1:
 ; 2.2 BEGINNING
 
 option2:
-    ; display the key read
+    ; read RAM address XXXX:YYYY "
 
-    mov     ah, 0eh
-    int     10h
-
-    mov     al, 2eh
-    int     10h
-
-    ; print "SEGMENT (XXXX) = "
-
-    mov     ah, 03h
-    mov     bh, 0
-    int     10h
-
-    inc     dh
-    mov     dl, 0
-
-    mov     ax, 0
-    mov     es, ax
-    mov     bp, in_awaits_str2
-
-    mov     bl, 07h
-    mov     cx, str2_awaits_len1
-
-    mov     ax, 1301h
-    int     10h
-
-    ; read user input (segment)
-
-    call    read_in
-
-    ; convert ascii read to a hex
-
-    mov     di, address
-    mov     si, in_buffer
-    call    atoh
-
-    ; print "OFFSET (YYYY) = "
-
-    mov     ah, 03h
-    mov     bh, 0
-    int     10h
-
-    inc     dh
-    mov     dl, 0
-
-    mov     ax, 0
-    mov     es, ax
-    mov     si, in_awaits_str2
-    add     si, str2_awaits_len1
-    mov     bp, si
-
-    mov     bl, 07h
-    mov     cx, str2_awaits_len2
-
-    mov     ax, 1301h
-    int     10h
-
-    ; read user input (offset)
-
-    call    read_in
-
-    ; convert ascii read to a hex
-
-    mov     di, address + 2
-    mov     si, in_buffer
-    call    atoh
+    call    read_ram_address
 
     ; read HTS
 
-    call    read_hts
+    call    read_hts_address
 
     ; write data from floppy
 
@@ -247,9 +180,7 @@ option2:
 
     ; print the data read
 
-    mov     ah, 03h
-    mov     bh, 0
-    int     10h
+    call    get_cursor_pos
 
     inc     dh
     mov     dl, 0
@@ -266,77 +197,13 @@ option2:
     jmp     _terminate
 
 option3:
-    ; display the key read
+    ; read RAM address XXXX:YYYY "
 
-    mov     ah, 0eh
-    int     10h
-
-    mov     al, 2eh
-    int     10h
-
-    ; print "SEGMENT (XXXX) = "
-
-    mov     ah, 03h
-    mov     bh, 0
-    int     10h
-
-    inc     dh
-    mov     dl, 0
-
-    mov     ax, 0
-    mov     es, ax
-    mov     bp, in_awaits_str2
-
-    mov     bl, 07h
-    mov     cx, str2_awaits_len1
-
-    mov     ax, 1301h
-    int     10h
-
-    ; read user input (segment)
-
-    call    read_in
-
-    ; convert ascii read to a hex
-
-    mov     di, address
-    mov     si, in_buffer
-    call    atoh
-
-    ; print "OFFSET (YYYY) = "
-
-    mov     ah, 03h
-    mov     bh, 0
-    int     10h
-
-    inc     dh
-    mov     dl, 0
-
-    mov     ax, 0
-    mov     es, ax
-    mov     si, in_awaits_str2
-    add     si, str2_awaits_len1
-    mov     bp, si
-
-    mov     bl, 07h
-    mov     cx, str2_awaits_len2
-
-    mov     ax, 1301h
-    int     10h
-
-    ; read user input (offset)
-
-    call    read_in
-
-    ; convert ascii read to a hex
-
-    mov     di, address + 2
-    mov     si, in_buffer
-    call    atoh
+    call    read_ram_address
 
     ; read HTS
 
-    call    read_hts
+    call    read_hts_address
 
     ; write data to floppy
 
@@ -359,8 +226,9 @@ option3:
 
 ; Keyboard reading subprocess
 
-read_in:
+read_input:
     mov     si, in_buffer
+    call    get_cursor_pos
 
     typing:
         mov     ah, 00h
@@ -390,9 +258,7 @@ read_in:
 	    dec     si
     	mov     byte [si], 0
 
-        mov     ah, 03h
-        mov     bh, 0
-	    int     10h
+        call    get_cursor_pos
 
 	    cmp     dl, 0
         je      prev_line
@@ -531,25 +397,113 @@ fill_write_buffer:
 ; Useful stuff
 
 break_line:
-    mov     ah, 03h
-    mov     bh, 0
-    int     10h
+    call    get_cursor_pos
 
-    mov     ah, 02h
     inc     dh
     mov     dl, 0
+
+    mov     ax, 0
+    mov     es, ax
+    mov     bp, prompt_start
+
+    mov     bl, 07h
+    mov     cx, 0
+
+    mov     ax, 1301h
     int     10h
 
     ret
 
-; HTS reading subprocess
+break_line_with_prompt:
+    call    get_cursor_pos
 
-read_hts:
-    ; print "{H, T, S} (one value per line):"
+    inc     dh
+    mov     dl, 0
 
+    mov     ax, 0
+    mov     es, ax
+    mov     bp, prompt_start
+
+    mov     bl, 07h
+    mov     cx, prompt_start_len
+
+    mov     ax, 1301h
+    int     10h
+
+    ret
+
+get_cursor_pos:
     mov     ah, 03h
     mov     bh, 0
     int     10h
+
+    ret
+
+; Addresses reading subprocesses
+
+read_ram_address:
+    ; print "SEGMENT (XXXX) = "
+
+    call    get_cursor_pos
+
+    inc     dh
+    mov     dl, 0
+
+    mov     ax, 0
+    mov     es, ax
+    mov     bp, in_awaits_str2
+
+    mov     bl, 07h
+    mov     cx, str2_awaits_len1
+
+    mov     ax, 1301h
+    int     10h
+
+    ; read user input (segment)
+
+    call    read_input
+
+    ; convert ascii read to a hex
+
+    mov     di, address
+    mov     si, in_buffer
+    call    atoh
+
+    ; print "OFFSET (YYYY) = "
+
+    call    get_cursor_pos
+
+    inc     dh
+    mov     dl, 0
+
+    mov     ax, 0
+    mov     es, ax
+    mov     si, in_awaits_str2
+    add     si, str2_awaits_len1
+    mov     bp, si
+
+    mov     bl, 07h
+    mov     cx, str2_awaits_len2
+
+    mov     ax, 1301h
+    int     10h
+
+    ; read user input (offset)
+
+    call    read_input
+
+    ; convert ascii read to a hex
+
+    mov     di, address + 2
+    mov     si, in_buffer
+    call    atoh
+
+    ret
+
+read_hts_address:
+    ; print "{H, T, S} (one value per line):"
+
+    call    get_cursor_pos
 
     inc     dh
     mov     dl, 0
@@ -562,20 +516,15 @@ read_hts:
     mov     bp, si
 
     mov     bl, 07h
-    mov     cx, str1_awaits_len3
+    mov     cx, str1_awaits_len3 + 1
 
     mov     ax, 1301h
     int     10h
 
-    mov     ah, 0eh
-    mov     al, 3ah
-    int     10h
-
-    call    break_line
-
     ; read user input (h)
 
-    call    read_in
+    call    break_line_with_prompt
+    call    read_input
 
     ; convert ascii read to an integer
 
@@ -583,11 +532,10 @@ read_hts:
     mov     si, in_buffer
     call    atoi
 
-    call    break_line
-
     ; read user input (t)
 
-    call    read_in
+    call    break_line_with_prompt
+    call    read_input
 
     ; convert ascii read to an integer
 
@@ -595,19 +543,16 @@ read_hts:
     mov     si, in_buffer
     call    atoi
 
-    call    break_line
-
     ; read user input (s)
 
-    call    read_in
+    call    break_line_with_prompt
+    call    read_input
 
     ; convert ascii read to an integer
 
     mov     di, nhts + 6
     mov     si, in_buffer
     call    atoi
-
-    call    break_line
 
     ret
 
@@ -631,9 +576,7 @@ _error:
     jmp _terminate
 
 _terminate:
-    mov     ah, 03h
-    mov     bh, 0
-    int     10h
+    call    get_cursor_pos
 
     mov     ah, 02h
     inc     dh
@@ -661,8 +604,7 @@ conv_check:
     mov     al, 20h
     int     10h
 
-    mov     ah, 03h
-    int     10h
+    call    get_cursor_pos
 
     push    word [di]
     
@@ -692,9 +634,7 @@ print_in_buff:
     mov     al, 20h
     int     10h
 
-    mov     ah, 03h
-    mov     bh, 0
-    int     10h
+    call    get_cursor_pos
  
 	mov     ax, 0
     mov     es, ax
@@ -762,7 +702,7 @@ section .data
     opt_str             dd "1. KBD-->FLP | 2. FLP-->RAM | 3. RAM-->FLP"
     opt_len             equ 42
 
-    in_awaits_str1       dd "STRING = N = {H, T, S} (one value per line)"
+    in_awaits_str1       dd "STRING = N = {H, T, S} (one value per line)", 3ah
     str1_awaits_len1     equ 9
     str1_awaits_len2     equ 4
     str1_awaits_len3     equ 30
@@ -770,6 +710,9 @@ section .data
     in_awaits_str2       dd "SEGMENT (XXXX) = OFFSET (YYYY) = "
     str2_awaits_len1     equ 17
     str2_awaits_len2     equ 16
+
+    prompt_start         dd ">>> "
+    prompt_start_len     equ 4
     
 section .bss
     write_buffer    resb 512
