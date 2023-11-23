@@ -14,3 +14,6 @@ mv task2_boot.com floppy.img
 nasm -f bin -o task2.com task2.asm
 dd if=task2.com of=floppy.img bs=512 seek=1 conv=notrunc
 rm -f task2.com
+
+rm -f io_floppy.img
+truncate -s 1474560 io_floppy.img

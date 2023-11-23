@@ -4,6 +4,8 @@ section .text
     global _start
 
 _start:
+    call    reset_memory
+
     ; print options listing string
 
     mov     ah, 03h
@@ -39,6 +41,9 @@ _start:
 
     cmp     al, '2'
     je      option2
+
+    cmp     al, '3'
+    je      option3
 
     jmp     _error
 
@@ -122,69 +127,9 @@ option1:
     mov     si, in_buffer
     call    atoi
 
-    ; print "{H, T, S} (one value per line):"
+    ; read HTS
 
-    mov     ah, 03h
-    mov     bh, 0
-    int     10h
-
-    inc     dh
-    mov     dl, 0
-
-    mov     ax, 0
-    mov     es, ax
-    mov     si, in_awaits_str1
-    add     si, str1_awaits_len1
-    add     si, str1_awaits_len2
-    mov     bp, si
-
-    mov     bl, 07h
-    mov     cx, str1_awaits_len3
-
-    mov     ax, 1301h
-    int     10h
-
-    mov     ah, 0eh
-    mov     al, 3ah
-    int     10h
-
-    call    break_line
-
-    ; read user input (h)
-
-    call    read_in
-
-    ; convert ascii read to an integer
-
-    mov     di, nhts + 2
-    mov     si, in_buffer
-    call    atoi
-
-    call    break_line
-
-    ; read user input (t)
-
-    call    read_in
-
-    ; convert ascii read to an integer
-
-    mov     di, nhts + 4
-    mov     si, in_buffer
-    call    atoi
-
-    call    break_line
-
-    ; read user input (s)
-
-    call    read_in
-
-    ; convert ascii read to an integer
-
-    mov     di, nhts + 6
-    mov     si, in_buffer
-    call    atoi
-
-    call    break_line
+    call    read_hts
 
     ; prepare writing buffer
 
@@ -242,7 +187,6 @@ option2:
     ; read user input (segment)
 
     call    read_in
-    ; ; call    print_in_buff
 
     ; convert ascii read to a hex
 
@@ -250,11 +194,170 @@ option2:
     mov     si, in_buffer
     call    atoh
 
-    ; check conversion
+    ; print "OFFSET (YYYY) = "
 
-    call    conv_check
+    mov     ah, 03h
+    mov     bh, 0
+    int     10h
+
+    inc     dh
+    mov     dl, 0
+
+    mov     ax, 0
+    mov     es, ax
+    mov     si, in_awaits_str2
+    add     si, str2_awaits_len1
+    mov     bp, si
+
+    mov     bl, 07h
+    mov     cx, str2_awaits_len2
+
+    mov     ax, 1301h
+    int     10h
+
+    ; read user input (offset)
+
+    call    read_in
+
+    ; convert ascii read to a hex
+
+    mov     di, address + 2
+    mov     si, in_buffer
+    call    atoh
+
+    ; read HTS
+
+    call    read_hts
+
+    ; write data from floppy
+
+    mov     es, [address]
+    mov     bx, [address + 2]
+
+    mov     ah, 02h
+    mov     al, 1
+    mov     ch, [nhts + 4]
+    mov     cl, [nhts + 6]
+    mov     dh, [nhts + 2]
+    mov     dl, 0
+    int     13h
+
+    int     13h
+    jc      _error
+
+    ; print the data read
+
+    mov     ah, 03h
+    mov     bh, 0
+    int     10h
+
+    inc     dh
+    mov     dl, 0
+
+    mov     es, [address]
+    mov     bp, [address + 2]
+
+    mov     bl, 07h
+    mov     cx, 512
+
+    mov     ax, 1301h
+    int     10h
 
     jmp     _terminate
+
+option3:
+    ; display the key read
+
+    mov     ah, 0eh
+    int     10h
+
+    mov     al, 2eh
+    int     10h
+
+    ; print "SEGMENT (XXXX) = "
+
+    mov     ah, 03h
+    mov     bh, 0
+    int     10h
+
+    inc     dh
+    mov     dl, 0
+
+    mov     ax, 0
+    mov     es, ax
+    mov     bp, in_awaits_str2
+
+    mov     bl, 07h
+    mov     cx, str2_awaits_len1
+
+    mov     ax, 1301h
+    int     10h
+
+    ; read user input (segment)
+
+    call    read_in
+
+    ; convert ascii read to a hex
+
+    mov     di, address
+    mov     si, in_buffer
+    call    atoh
+
+    ; print "OFFSET (YYYY) = "
+
+    mov     ah, 03h
+    mov     bh, 0
+    int     10h
+
+    inc     dh
+    mov     dl, 0
+
+    mov     ax, 0
+    mov     es, ax
+    mov     si, in_awaits_str2
+    add     si, str2_awaits_len1
+    mov     bp, si
+
+    mov     bl, 07h
+    mov     cx, str2_awaits_len2
+
+    mov     ax, 1301h
+    int     10h
+
+    ; read user input (offset)
+
+    call    read_in
+
+    ; convert ascii read to a hex
+
+    mov     di, address + 2
+    mov     si, in_buffer
+    call    atoh
+
+    ; read HTS
+
+    call    read_hts
+
+    ; write data to floppy
+
+    mov     es, [address]
+    mov     bx, [address + 2]
+
+    mov     ah, 03h
+    mov     al, 1
+    mov     ch, [nhts + 4]
+    mov     cl, [nhts + 6]
+    mov     dh, [nhts + 2]
+    mov     dl, 0
+    int     13h
+
+    int     13h
+    jc      _error
+
+    jmp     _terminate
+
+
+; Keyboard reading subprocess
 
 read_in:
     mov     si, in_buffer
@@ -439,6 +542,75 @@ break_line:
 
     ret
 
+; HTS reading subprocess
+
+read_hts:
+    ; print "{H, T, S} (one value per line):"
+
+    mov     ah, 03h
+    mov     bh, 0
+    int     10h
+
+    inc     dh
+    mov     dl, 0
+
+    mov     ax, 0
+    mov     es, ax
+    mov     si, in_awaits_str1
+    add     si, str1_awaits_len1
+    add     si, str1_awaits_len2
+    mov     bp, si
+
+    mov     bl, 07h
+    mov     cx, str1_awaits_len3
+
+    mov     ax, 1301h
+    int     10h
+
+    mov     ah, 0eh
+    mov     al, 3ah
+    int     10h
+
+    call    break_line
+
+    ; read user input (h)
+
+    call    read_in
+
+    ; convert ascii read to an integer
+
+    mov     di, nhts + 2
+    mov     si, in_buffer
+    call    atoi
+
+    call    break_line
+
+    ; read user input (t)
+
+    call    read_in
+
+    ; convert ascii read to an integer
+
+    mov     di, nhts + 4
+    mov     si, in_buffer
+    call    atoi
+
+    call    break_line
+
+    ; read user input (s)
+
+    call    read_in
+
+    ; convert ascii read to an integer
+
+    mov     di, nhts + 6
+    mov     si, in_buffer
+    call    atoi
+
+    call    break_line
+
+    ret
+
 ; Trailer subprocesses
 
 _error:
@@ -538,6 +710,53 @@ print_in_buff:
     ret
 
 ; Data declaration and initialization
+
+reset_memory:
+    mov     si, write_buffer
+    mov     di, write_buffer + 512
+    call    reset_buffer
+
+    mov     si, in_buffer
+    mov     di, in_buffer + 256
+    call    reset_buffer
+
+    mov     si, string
+    mov     di, string + 256
+    call    reset_buffer
+
+    mov     si, nhts
+    mov     di, nhts + 8
+    call    reset_buffer
+
+    mov     si, address
+    mov     di, address + 4
+    call    reset_buffer
+
+    call    reset_registers
+
+    ret
+
+reset_registers:
+    xor     ax, ax
+    xor     bx, bx
+    xor     cx, cx
+    xor     dx, dx
+    xor     si, si
+    xor     di, di
+    xor     bp, bp
+    xor     bx, bx
+
+    ret
+
+reset_buffer:
+    reset_buffer_loop:
+        mov     byte [si], 0
+        inc     si
+
+        cmp     si, di
+        jl      reset_buffer_loop
+
+    ret
 
 section .data
     opt_str             dd "1. KBD-->FLP | 2. FLP-->RAM | 3. RAM-->FLP"
