@@ -13,7 +13,7 @@ mov     ch, 0
 mov     cl, 2
 mov     dh, 0
 mov     dl, 0
-int     0x13
+int     13h
 
 jmp     0000h:1000h
 

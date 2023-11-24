@@ -1,0 +1,27 @@
+#!/bin/bash
+
+if [ $# -ne 1 ]; then
+    echo "Usage: $0 <filename>"
+    exit 1
+fi
+
+filename="$1"
+ext1=".asm"
+ext2=".o"
+
+backup_dir_name="backup/"
+
+if [ ! -d "$backup_dir_name" ]; then
+	mkdir "$backup_dir_name"
+fi
+
+cp "$filename$ext1" "$backup_dir_name"
+
+nasm -f elf -o "$filename$ext2" "$filename$ext1"
+ld -m elf_i386 -o "$filename" "$filename$ext2"
+
+if [ -e "filename" ]; then
+	gdb ./"$filename"
+fi
+
+rm "$filename" "$filename$ext2"
