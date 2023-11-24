@@ -1,4 +1,4 @@
-org 1000h
+org 8000h
 
 section .text
     global _start
@@ -223,7 +223,9 @@ option2:
 
     ; print the data read
 
-    call    paginated_output
+    call    print_address
+
+    ; call    paginated_output
 
     jmp     _terminate
 
@@ -252,7 +254,7 @@ option3:
     mov     bx, [address + 2]
 
     mov     ah, 03h
-    mov     al, 4
+    mov     al, 1
     mov     ch, [nhts + 4]
     mov     cl, [nhts + 6]
     mov     dh, [nhts + 2]
@@ -715,66 +717,66 @@ _terminate:
 
 ; Debug subprocesses
 
-; conv_check:
-;     mov     ah, 0eh
-;     mov     al, 20h
-;     int     10h
-; 
-;     mov     ah, 0eh
-;     mov     al, 3eh
-;     int     10h
-; 
-;     mov     ah, 0eh
-;     mov     al, 3eh
-;     int     10h
-; 
-;     mov     ah, 0eh
-;     mov     al, 20h
-;     int     10h
-; 
-;     call    get_cursor_pos
-; 
-;     push    word [di]
-;     
-;     mov     ah, 0eh
-;     mov     al, [di]
-;     int     10h
-; 
-;     pop     word [di]
-; 
-;     ret
-; 
-; print_in_buff:
-;     mov     ah, 0eh
-;     mov     al, 20h
-;     int     10h
-; 
-;     mov     ah, 0eh
-;     mov     al, 3eh
-;     int     10h
-; 
-;     mov     ah, 0eh
-;     mov     al, 3eh
-;     int     10h
-; 
-;     mov     ah, 0eh
-;     mov     al, 20h
-;     int     10h
-; 
-;     call    get_cursor_pos
-;  
-; 	mov     ax, 0
-;     mov     es, ax
-;     mov     bp, in_buffer
-; 
-;     mov     bl, 07h
-;     sub     si, in_buffer
-;     mov     cx, si
-; 
-;     mov     ax, 1301h
-;     int     10h
-; 
-;     ret
+conv_check:
+    mov     ah, 0eh
+    mov     al, 20h
+    int     10h
+
+    mov     ah, 0eh
+    mov     al, 3eh
+    int     10h
+
+    mov     ah, 0eh
+    mov     al, 3eh
+    int     10h
+
+    mov     ah, 0eh
+    mov     al, 20h
+    int     10h
+
+    call    get_cursor_pos
+
+    push    word [di]
+    
+    mov     ah, 0eh
+    mov     al, [di]
+    int     10h
+
+    pop     word [di]
+
+    ret
+
+print_in_buff:
+    mov     ah, 0eh
+    mov     al, 20h
+    int     10h
+
+    mov     ah, 0eh
+    mov     al, 3eh
+    int     10h
+
+    mov     ah, 0eh
+    mov     al, 3eh
+    int     10h
+
+    mov     ah, 0eh
+    mov     al, 20h
+    int     10h
+
+    call    get_cursor_pos
+ 
+	mov     ax, 0
+    mov     es, ax
+    mov     bp, in_buffer
+
+    mov     bl, 07h
+    sub     si, in_buffer
+    mov     cx, si
+
+    mov     ax, 1301h
+    int     10h
+
+    ret
 
 ; Data declaration and initialization
 
@@ -807,7 +809,7 @@ reset_memory:
     call    clear_buffer
 
     mov     si, big_buffer
-    mov     di, big_buffer + 512
+    mov     di, big_buffer + 1
     call    clear_buffer
 
     call    reset_registers
@@ -861,4 +863,4 @@ section .bss
     address             resb 4
     pag_output_len      resb 4
     big_buffer_len      resb 4
-    big_buffer          resb 512
+    big_buffer          resb 1
