@@ -1,10 +1,11 @@
-org 8000h
+org 7e00h
 
 section .text
     global _start
 
 _start:
     call    reset_memory
+    xor     sp, sp
 
     ; print options listing string
 
@@ -79,7 +80,7 @@ option1:
 
     ; save the string to its own buffer
 
-    mov     si, in_buffer
+    mov     si, storage_buffer
     mov     di, string
 
     char_copy_loop:
@@ -117,7 +118,7 @@ option1:
     ; convert ascii read to an integer
 
     mov     di, nhts
-    mov     si, in_buffer
+    mov     si, storage_buffer
     call    atoi
 
     ; read HTS
@@ -127,12 +128,11 @@ option1:
     ; prepare writing buffer
 
     mov     si, string
-    call    fill_big_buffer
-
+    call    fill_storage_buffer
     ; calculate the number of sectors to write
 
     xor     dx, dx
-    mov     ax, [big_buffer_len]
+    mov     ax, [storage_curr_size]
     mov     bx, 512
     div     bx
 
@@ -142,7 +142,7 @@ option1:
 
     mov     ax, 0
 	mov     es, ax
-    mov     bx, big_buffer
+    mov     bx, storage_buffer
 
     pop     ax
 
@@ -154,7 +154,18 @@ option1:
     mov     dl, 0
 
     int     13h
-    jc      _error
+    ; jc      _error
+
+    push    ax
+
+    call    break_line
+
+    pop     ax
+
+    mov     al, '0'
+    add     al, ah
+    mov     ah, 0eh
+    int     10h
 
     jmp     _terminate
 
@@ -172,6 +183,10 @@ option2:
     ; read RAM address XXXX:YYYY "
 
     call    read_ram_address
+
+    ; read HTS
+
+    call    read_hts_address
 
     ; print "N = "
 
@@ -199,12 +214,8 @@ option2:
     ; convert ascii read to an integer
 
     mov     di, nhts
-    mov     si, in_buffer
+    mov     si, storage_buffer
     call    atoi
-
-    ; read HTS
-
-    call    read_hts_address
 
     ; read data from floppy
 
@@ -219,11 +230,42 @@ option2:
     mov     dl, 0
 
     int     13h
-    jc      _error
+    ; jc      _error
+
+    push    ax
+; calculate the number of sectors to write
+
+    xor     dx, dx
+    mov     ax, [storage_curr_size]
+    mov     bx, 512
+    div     bx
+    call    break_line
+
+    pop     ax
+
+    mov     al, '0'
+    add     al, ah
+    mov     ah, 0eh
+    int     10h
 
     ; print the data read
 
-    call    print_address
+    call    get_cursor_pos
+
+    inc     dh
+    mov     dl, 0
+
+    mov     ax, 0
+    mov     es, ax
+    mov     si, in_awaits_str1
+    add     si, str1_awaits_len1
+    mov     bp, si
+
+    mov     bl, 07h
+    mov     cx, str1_awaits_len2
+
+    mov     ax, 1301h
+    int     10h
 
     ; call    paginated_output
 
@@ -248,20 +290,66 @@ option3:
 
     call    read_hts_address
 
+    ; print "N = "
+
+    call    get_cursor_pos
+
+    inc     dh
+    mov     dl, 0
+
+    mov     ax, 0
+    mov     es, ax
+    mov     si, in_awaits_str1
+    add     si, str1_awaits_len1
+    mov     bp, si
+
+    mov     bl, 07h
+    mov     cx, str1_awaits_len2
+
+    mov     ax, 1301h
+    int     10h
+
+    ; read user input (n)
+
+    call    read_input
+
+    ; convert ascii read to an integer
+
+    mov     di, nhts
+    mov     si, storage_buffer
+    call    atoi
+
+    ; calculate the number of sectors to write
+
+    xor     dx, dx
+    mov     ax, [nhts]
+    mov     bx, 512
+    div     bx
+
     ; write data to floppy
 
     mov     es, [address]
     mov     bx, [address + 2]
 
     mov     ah, 03h
-    mov     al, 1
+    inc     al
     mov     ch, [nhts + 4]
     mov     cl, [nhts + 6]
     mov     dh, [nhts + 2]
     mov     dl, 0
-    
     int     13h
-    jc      _error
+    ; jc      _error
+
+    push    ax
+
+    call    break_line
+
+    pop     ax
+
+    mov     al, '0'
+    add     al, ah
+    mov     ah, 0eh
+    int     10h
 
     jmp     _terminate
 
@@ -269,7 +357,7 @@ option3:
 ; Complex I/O subprocesses
 
 read_input:
-    mov     si, in_buffer
+    mov     si, storage_buffer
     call    get_cursor_pos
 
     typing:
@@ -282,7 +370,7 @@ read_input:
 	    cmp     al, 0dh
 	    je      hdl_enter
 
-        cmp     si, in_buffer + 256
+        cmp     si, storage_buffer + 256
         je      typing
 
         mov     [si], al
@@ -294,7 +382,7 @@ read_input:
 	    jmp     typing
 
     hdl_backspace:
-	    cmp     si, in_buffer
+	    cmp     si, storage_buffer
 	    je      typing
 
 	    dec     si
@@ -328,15 +416,17 @@ read_input:
         jmp     typing
 
     hdl_enter:
-        cmp     si, in_buffer
+        cmp     si, storage_buffer
         je      typing
 
         mov     byte [si], 0
 
         ret
 
+; paginated output for 2.2
+
 paginated_output:
-    mov     si, [address]
+    mov     es, [address]
     mov     bp, [address + 2]
 
     mov     ax, [nhts]
@@ -345,21 +435,12 @@ paginated_output:
     imul    ax, cx
     mov     [pag_output_len], ax
 
-    paginated_output_loop:
-        wait_for_page_advance_signal:
-            mov     ah, 00h
-            int     16h
+    xor     cx, cx
 
-            cmp     al, 20h
-            jne     wait_for_page_advance_signal
-
+    paginated_output_loop:     
         ; advance page
 
-        mov     ax, [page_num]
-        inc     ax
-        mov     [page_num], ax
-
-        ; switch to the next page
+        inc     word [page_num]
 
         mov     ah, 05h
         mov     al, [page_num]
@@ -371,38 +452,31 @@ paginated_output:
         mov     dh, 0
         mov     dl, 0
 
+        push    cx
+
         mov     bl, 07h
         mov     cx, 2000
 
         mov     ax, 1301h
         int     10h
 
-        ; advance memory pointer
+        ; advance pointers and counters
 
-        add     si, 2000
-        adc     bp, 0
+        pop     cx
+        add     cx, 2000
+        add     bp, 2000
 
-        cmp     si, 0
-        jne     paginated_output_loop
+        wait_for_page_advance_signal:
+            mov     ah, 00h
+            int     16h
+
+            cmp     al, 20h
+            jne     wait_for_page_advance_signal
+
+        cmp     cx, [pag_output_len]
+        jl      paginated_output_loop
 
         ret
-
-print_address:
-    call    get_cursor_pos
-
-    inc     dh
-    mov     dl, 0
-
-    mov     es, [address]
-    mov     bp, [address + 2]
-
-    mov     bl, 07h
-    mov     cx, 512
-
-    mov     ax, 1301h
-    int     10h
-
-    ret
 
 ; In. number conversions
 
@@ -411,13 +485,14 @@ atoi:
         cmp     byte [si], 0
         je      atoi_conv_done
 
+        xor     ax, ax
         mov     al, [si]
         sub     al, '0'
 
-        mov     bl, [di]
+        mov     bx, [di]
         imul    bx, 10
         add     bx, ax
-        mov     [di], bl
+        mov     [di], bx
 
         inc     si
 
@@ -431,6 +506,7 @@ atoh:
         cmp     byte [si], 0
         je      atoh_conv_done
 
+        xor     ax, ax
         mov     al, [si]
         cmp     al, 65
         jl      conv_digit  
@@ -443,10 +519,10 @@ atoh:
             sub     al, 48
 
         atoh_finish_iteration:
-            mov     bl, [di]
+            mov     bx, [di]
             imul    bx, 16
             add     bx, ax
-            mov     [di], bl
+            mov     [di], bx
 
             inc     si
 
@@ -457,7 +533,7 @@ atoh:
 
 ; With this subprocess, copy the string n times in a separate buffer to write on floppy
 
-fill_big_buffer:
+fill_storage_buffer:
     push    si
     mov     cx, 0
 
@@ -472,8 +548,7 @@ fill_big_buffer:
 
     end_found:
         pop     si
-        mov     di, big_buffer
-        movzx   bx, [nhts]
+        mov     di, storage_buffer
 
     copy_string_to_buffer_loop:
         push    cx
@@ -482,17 +557,15 @@ fill_big_buffer:
 
         pop     si
         pop     cx
-        dec     bx
 
-        mov     ax, [big_buffer_len]
-        add     ax, cx
-        mov     [big_buffer_len], ax
+        dec     word [nhts]
+        add     word [storage_curr_size], cx
 
-        cmp     bx, 0
+        cmp     word [nhts], 0
         jg      copy_string_to_buffer_loop
 
     push    di
-    sub     di, big_buffer
+    sub     di, storage_buffer
     mov     ax, di
     pop     di
 
@@ -503,7 +576,7 @@ fill_big_buffer:
     mov     cx, 0
 
     nulls:
-        mov     byte [di], 0
+        mov     byte [edi], 0
         
         inc     di
         inc     cx
@@ -586,7 +659,7 @@ read_ram_address:
     ; convert ascii read to a hex
 
     mov     di, address
-    mov     si, in_buffer
+    mov     si, storage_buffer
     call    atoh
 
     ; print "OFFSET (YYYY) = "
@@ -615,7 +688,7 @@ read_ram_address:
     ; convert ascii read to a hex
 
     mov     di, address + 2
-    mov     si, in_buffer
+    mov     si, storage_buffer
     call    atoh
 
     ret
@@ -636,7 +709,7 @@ read_hts_address:
     mov     bp, si
 
     mov     bl, 07h
-    mov     cx, str1_awaits_len3 + 1
+    mov     cx, str1_awaits_len3
 
     mov     ax, 1301h
     int     10h
@@ -649,7 +722,7 @@ read_hts_address:
     ; convert ascii read to an integer
 
     mov     di, nhts + 2
-    mov     si, in_buffer
+    mov     si, storage_buffer
     call    atoi
 
     ; read user input (t)
@@ -660,7 +733,7 @@ read_hts_address:
     ; convert ascii read to an integer
 
     mov     di, nhts + 4
-    mov     si, in_buffer
+    mov     si, storage_buffer
     call    atoi
 
     ; read user input (s)
@@ -671,7 +744,7 @@ read_hts_address:
     ; convert ascii read to an integer
 
     mov     di, nhts + 6
-    mov     si, in_buffer
+    mov     si, storage_buffer
     call    atoi
 
     ret
@@ -679,6 +752,9 @@ read_hts_address:
 ; Trailer subprocesses
 
 _error:
+    call    get_cursor_pos
+    call    break_line
+
     push    52h
     push    52h
     push    45h
@@ -696,8 +772,6 @@ _error:
     jmp _terminate
 
 _terminate:
-    call    get_cursor_pos
-
     wait_for_confirm:
         mov     ah, 00h
         int     16h
@@ -705,9 +779,7 @@ _terminate:
         cmp     al, 0dh
         jne     wait_for_confirm
 
-    mov     ax, [page_num]
-    inc     ax
-    mov     [page_num], ax
+    inc     word [page_num]
 
     mov     ah, 05h
     mov     al, [page_num]
@@ -734,18 +806,27 @@ conv_check:
     mov     al, 20h
     int     10h
 
-    call    get_cursor_pos
+    mov     ax, [di]
+    mov     bx, [test_result]
 
-    push    word [di]
-    
-    mov     ah, 0eh
-    mov     al, [di]
-    int     10h
+    xor     ax, bx
+    jnz     incorrect
 
-    pop     word [di]
+    correct:
+        mov     ah, 0eh
+        mov     al, 53h
+        int     10h
 
-    ret
+        jmp     check_end
 
+    incorrect:
+        mov     ah, 0eh
+        mov     al, 45h
+        int     10h
+
+    check_end:
+        ret
+ 
 print_in_buff:
     mov     ah, 0eh
     mov     al, 20h
@@ -767,10 +848,10 @@ print_in_buff:
  
 	mov     ax, 0
     mov     es, ax
-    mov     bp, in_buffer
+    mov     bp, storage_buffer
 
     mov     bl, 07h
-    sub     si, in_buffer
+    sub     si, storage_buffer
     mov     cx, si
 
     mov     ax, 1301h
@@ -781,12 +862,14 @@ print_in_buff:
 ; Data declaration and initialization
 
 reset_memory:
+    mov     word [pag_output_len], 0
+
     mov     ah, 00h
     int     13h
 
-    mov     si, in_buffer
-    mov     di, in_buffer + 256
-    call    clear_buffer
+    mov     si, storage_buffer
+    mov     di, storage_buffer + 512
+    call    reset_buffer
 
     mov     si, string
     mov     di, string + 256
@@ -812,6 +895,14 @@ reset_memory:
     mov     di, big_buffer + 1
     call    clear_buffer
 
+    mov     si, storage_curr_size
+    mov     di, storage_curr_size + 4
+    call    reset_buffer
+
+    mov     si, storage_buffer
+    mov     di, storage_buffer + 1
+    call    reset_buffer
+
     call    reset_registers
 
     ret
@@ -824,7 +915,6 @@ reset_registers:
     xor     si, si
     xor     di, di
     xor     bp, bp
-    xor     bx, bx
 
     ret
 
@@ -845,7 +935,7 @@ section .data
     in_awaits_str1       dd "STRING = N = {H, T, S} (one value per line)", 3ah
     str1_awaits_len1     equ 9
     str1_awaits_len2     equ 4
-    str1_awaits_len3     equ 30
+    str1_awaits_len3     equ 31
 
     in_awaits_str2       dd "SEGMENT (XXXX) = OFFSET (YYYY) = "
     str2_awaits_len1     equ 17
@@ -855,12 +945,13 @@ section .data
     prompt_start_len     equ 4
 
     page_num             dw 0
+    test_result          dw 10000
+
+    pag_output_len       dw 0
     
 section .bss
-    in_buffer           resb 256
     string              resb 256
     nhts                resb 8
     address             resb 4
-    pag_output_len      resb 4
-    big_buffer_len      resb 4
-    big_buffer          resb 1
+    storage_curr_size   resb 4
+    storage_buffer      resb 1
