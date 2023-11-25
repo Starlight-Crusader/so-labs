@@ -1,4 +1,4 @@
-org 1000h
+org 7e00h
 
 section .text
     global _start
@@ -173,7 +173,7 @@ option2:
     mov     cl, [nhts + 6]
     mov     dh, [nhts + 2]
     mov     dl, 0
-    int     13h
+    ; int     13h
 
     int     13h
     jc      _error
@@ -216,7 +216,7 @@ option3:
     mov     cl, [nhts + 6]
     mov     dh, [nhts + 2]
     mov     dl, 0
-    int     13h
+    ;int     13h
 
     int     13h
     jc      _error
