@@ -32,18 +32,6 @@ _start:
     mov     ah, 00h
     int     16h
 
-    ; display the key read
-
-    mov     ah, 0eh
-    int     10h
-    
-    push    ax
-
-    mov     al, 2eh
-    int     10h
-
-    pop     ax
-
     ; execute chosen operation
 
     cmp     al, '1'
@@ -60,6 +48,14 @@ _start:
 ; 2.1 BEGINNING
 
 option1:
+    ; display the key read
+
+    mov     ah, 0eh
+    int     10h
+
+    mov     al, 2eh
+    int     10h
+
     ; print "STRING = "
 
     call    get_cursor_pos
@@ -83,7 +79,7 @@ option1:
 
     ; save the string to its own buffer
 
-    mov     si, in_buffer
+    mov     si, storage_buffer
     mov     di, string
 
     char_copy_loop:
@@ -121,7 +117,7 @@ option1:
     ; convert ascii read to an integer
 
     mov     di, nhts
-    mov     si, in_buffer
+    mov     si, storage_buffer
     call    atoi
 
     ; read HTS
@@ -131,13 +127,13 @@ option1:
     ; prepare writing buffer
 
     mov     si, string
-    call    fill_write_buffer
+    call    fill_storage_buffer
 
     ; write to the floppy
 
     mov     ax, 0
 	mov     es, ax
-    mov     bx, write_buffer
+    mov     bx, storage_buffer
 
     mov     ah, 03h
     mov     al, 1
@@ -154,6 +150,14 @@ option1:
 ; 2.2 BEGINNING
 
 option2:
+    ; display the key read
+
+    mov     ah, 0eh
+    int     10h
+
+    mov     al, 2eh
+    int     10h
+
     ; read RAM address XXXX:YYYY "
 
     call    read_ram_address
@@ -162,18 +166,46 @@ option2:
 
     call    read_hts_address
 
-    ; write data from floppy
+    ; print "N = "
+
+    call    get_cursor_pos
+
+    inc     dh
+    mov     dl, 0
+
+    mov     ax, 0
+    mov     es, ax
+    mov     si, in_awaits_str1
+    add     si, str1_awaits_len1
+    mov     bp, si
+
+    mov     bl, 07h
+    mov     cx, str1_awaits_len2
+
+    mov     ax, 1301h
+    int     10h
+
+    ; read user input (n)
+
+    call    read_input
+
+    ; convert ascii read to an integer
+
+    mov     di, nhts
+    mov     si, storage_buffer
+    call    atoi
+
+    ; read data from floppy
 
     mov     es, [address]
     mov     bx, [address + 2]
 
     mov     ah, 02h
-    mov     al, 1
+    mov     al, [nhts]
     mov     ch, [nhts + 4]
     mov     cl, [nhts + 6]
     mov     dh, [nhts + 2]
     mov     dl, 0
-    ; int     13h
 
     int     13h
     jc      _error
@@ -197,6 +229,14 @@ option2:
     jmp     _terminate
 
 option3:
+    ; display the key read
+
+    mov     ah, 0eh
+    int     10h
+
+    mov     al, 2eh
+    int     10h
+
     ; read RAM address XXXX:YYYY "
 
     call    read_ram_address
@@ -216,7 +256,6 @@ option3:
     mov     cl, [nhts + 6]
     mov     dh, [nhts + 2]
     mov     dl, 0
-    ;int     13h
 
     int     13h
     jc      _error
@@ -227,7 +266,7 @@ option3:
 ; Keyboard reading subprocess
 
 read_input:
-    mov     si, in_buffer
+    mov     si, storage_buffer
     call    get_cursor_pos
 
     typing:
@@ -240,7 +279,7 @@ read_input:
 	    cmp     al, 0dh
 	    je      hdl_enter
 
-        cmp     si, in_buffer + 256
+        cmp     si, storage_buffer + 256
         je      typing
 
         mov     [si], al
@@ -252,7 +291,7 @@ read_input:
 	    jmp     typing
 
     hdl_backspace:
-	    cmp     si, in_buffer
+	    cmp     si, storage_buffer
 	    je      typing
 
 	    dec     si
@@ -286,7 +325,7 @@ read_input:
         jmp     typing
 
     hdl_enter:
-        cmp     si, in_buffer
+        cmp     si, storage_buffer
         je      typing
 
         mov     byte [si], 0
@@ -300,13 +339,14 @@ atoi:
         cmp     byte [si], 0
         je      atoi_conv_done
 
+        xor     ax, ax
         mov     al, [si]
         sub     al, '0'
 
-        mov     bl, [di]
+        mov     bx, [di]
         imul    bx, 10
         add     bx, ax
-        mov     [di], bl
+        mov     [di], bx
 
         inc     si
 
@@ -320,6 +360,7 @@ atoh:
         cmp     byte [si], 0
         je      atoh_conv_done
 
+        xor     ax, ax
         mov     al, [si]
         cmp     al, 65
         jl      conv_digit  
@@ -332,10 +373,10 @@ atoh:
             sub     al, 48
 
         atoh_finish_iteration:
-            mov     bl, [di]
+            mov     bx, [di]
             imul    bx, 16
             add     bx, ax
-            mov     [di], bl
+            mov     [di], bx
 
             inc     si
 
@@ -346,7 +387,7 @@ atoh:
 
 ; With this subprocess, copy the string n times in a separate buffer to write on floppy
 
-fill_write_buffer:
+fill_storage_buffer:
     push    si
     mov     cx, 0
 
@@ -361,7 +402,7 @@ fill_write_buffer:
 
     end_found:
         pop     si
-        mov     di, write_buffer
+        mov     di, storage_buffer
         movzx   bx, [nhts]
 
     copy_string_to_buffer_loop:
@@ -378,7 +419,7 @@ fill_write_buffer:
 
     zeros:
         push    di
-        sub     di, write_buffer
+        sub     di, storage_buffer
 
         mov     cx, di
         pop     di
@@ -434,7 +475,7 @@ break_line_with_prompt:
 
 get_cursor_pos:
     mov     ah, 03h
-    mov     bh, 0
+    mov     bh, [page_num]
     int     10h
 
     ret
@@ -466,7 +507,7 @@ read_ram_address:
     ; convert ascii read to a hex
 
     mov     di, address
-    mov     si, in_buffer
+    mov     si, storage_buffer
     call    atoh
 
     ; print "OFFSET (YYYY) = "
@@ -495,7 +536,7 @@ read_ram_address:
     ; convert ascii read to a hex
 
     mov     di, address + 2
-    mov     si, in_buffer
+    mov     si, storage_buffer
     call    atoh
 
     ret
@@ -529,7 +570,7 @@ read_hts_address:
     ; convert ascii read to an integer
 
     mov     di, nhts + 2
-    mov     si, in_buffer
+    mov     si, storage_buffer
     call    atoi
 
     ; read user input (t)
@@ -540,7 +581,7 @@ read_hts_address:
     ; convert ascii read to an integer
 
     mov     di, nhts + 4
-    mov     si, in_buffer
+    mov     si, storage_buffer
     call    atoi
 
     ; read user input (s)
@@ -551,7 +592,7 @@ read_hts_address:
     ; convert ascii read to an integer
 
     mov     di, nhts + 6
-    mov     si, in_buffer
+    mov     si, storage_buffer
     call    atoi
 
     ret
@@ -559,6 +600,9 @@ read_hts_address:
 ; Trailer subprocesses
 
 _error:
+    call    get_cursor_pos
+    call    break_line
+
     push    52h
     push    52h
     push    45h
@@ -576,11 +620,19 @@ _error:
     jmp _terminate
 
 _terminate:
-    call    get_cursor_pos
+    wait_for_confirm:
+        mov     ah, 00h
+        int     16h
 
-    mov     ah, 02h
-    inc     dh
-    mov     dl, 0
+        cmp     al, 0dh
+        jne     wait_for_confirm
+
+    mov     ax, [page_num]
+    inc     ax
+    mov     [page_num], ax
+
+    mov     ah, 05h
+    mov     al, [page_num]
     int     10h
 
     jmp     _start
@@ -604,19 +656,27 @@ conv_check:
     mov     al, 20h
     int     10h
 
-    call    get_cursor_pos
+    mov     ax, [di]
+    mov     bx, [test_result]
 
-    push    word [di]
-    
-    mov     ah, 0eh
-    ; add     word [di], 38
-    mov     al, [di]
-    int     10h
+    xor     ax, bx
+    jnz     incorrect
 
-    pop     word [di]
+    correct:
+        mov     ah, 0eh
+        mov     al, 53h
+        int     10h
 
-    ret
+        jmp     check_end
 
+    incorrect:
+        mov     ah, 0eh
+        mov     al, 45h
+        int     10h
+
+    check_end:
+        ret
+ 
 print_in_buff:
     mov     ah, 0eh
     mov     al, 20h
@@ -638,10 +698,10 @@ print_in_buff:
  
 	mov     ax, 0
     mov     es, ax
-    mov     bp, in_buffer
+    mov     bp, storage_buffer
 
     mov     bl, 07h
-    sub     si, in_buffer
+    sub     si, storage_buffer
     mov     cx, si
 
     mov     ax, 1301h
@@ -652,12 +712,11 @@ print_in_buff:
 ; Data declaration and initialization
 
 reset_memory:
-    mov     si, write_buffer
-    mov     di, write_buffer + 512
-    call    reset_buffer
+    mov     ah, 00h
+    int     13h
 
-    mov     si, in_buffer
-    mov     di, in_buffer + 256
+    mov     si, storage_buffer
+    mov     di, storage_buffer + 512
     call    reset_buffer
 
     mov     si, string
@@ -670,6 +729,14 @@ reset_memory:
 
     mov     si, address
     mov     di, address + 4
+    call    reset_buffer
+
+    mov     si, storage_curr_len
+    mov     di, storage_curr_len + 4
+    call    reset_buffer
+
+    mov     si, storage_buffer
+    mov     di, storage_buffer + 1
     call    reset_buffer
 
     call    reset_registers
@@ -713,10 +780,13 @@ section .data
 
     prompt_start         dd ">>> "
     prompt_start_len     equ 4
+
+    page_num             dw  0
+    test_result          dw  1000h
     
 section .bss
-    write_buffer    resb 512
-    in_buffer       resb 256
-    string          resb 256
-    nhts            resb 8
-    address         resb 4
+    string              resb 256
+    nhts                resb 8
+    address             resb 4
+    storage_curr_len    resb 4
+    storage_buffer      resb 1
