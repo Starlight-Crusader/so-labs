@@ -5,6 +5,7 @@ section .text
 
 _start:
     call    reset_memory
+    xor     sp, sp
 
     ; print options listing string
 
@@ -129,14 +130,25 @@ option1:
     mov     si, string
     call    fill_storage_buffer
 
+    ; calculate the number of sectors to write
+
+    xor     dx, dx
+    mov     ax, [storage_curr_size]
+    mov     bx, 512
+    div     bx
+
     ; write to the floppy
+
+    push    ax
 
     mov     ax, 0
 	mov     es, ax
     mov     bx, storage_buffer
 
+    pop     ax
+
     mov     ah, 03h
-    mov     al, 1
+    inc     al
     mov     ch, [nhts + 4]
     mov     cl, [nhts + 6]
     mov     dh, [nhts + 2]
@@ -403,7 +415,6 @@ fill_storage_buffer:
     end_found:
         pop     si
         mov     di, storage_buffer
-        movzx   bx, [nhts]
 
     copy_string_to_buffer_loop:
         push    cx
@@ -412,25 +423,32 @@ fill_storage_buffer:
 
         pop     si
         pop     cx
-        dec     bx
 
-        cmp     bx, 0
+        dec     word [nhts]
+        add     word [storage_curr_size], cx
+
+        cmp     word [nhts], 0
         jg      copy_string_to_buffer_loop
 
-    zeros:
-        push    di
-        sub     di, storage_buffer
+    push    di
+    sub     di, storage_buffer
+    mov     ax, di
+    pop     di
 
-        mov     cx, di
-        pop     di
+    xor     dx, dx
+    mov     bx, 512
+    div     bx
+    
+    mov     cx, 0
 
-        cmp     cx, 512
-        je      return
-
-        mov     byte [di], 30h
+    nulls:
+        mov     byte [edi], 0
+        
         inc     di
+        inc     cx
 
-        jmp     zeros
+        cmp     cx, dx
+        jl      nulls
 
     return:
         ret
@@ -731,8 +749,8 @@ reset_memory:
     mov     di, address + 4
     call    reset_buffer
 
-    mov     si, storage_curr_len
-    mov     di, storage_curr_len + 4
+    mov     si, storage_curr_size
+    mov     di, storage_curr_size + 4
     call    reset_buffer
 
     mov     si, storage_buffer
@@ -751,7 +769,6 @@ reset_registers:
     xor     si, si
     xor     di, di
     xor     bp, bp
-    xor     bx, bx
 
     ret
 
@@ -782,11 +799,11 @@ section .data
     prompt_start_len     equ 4
 
     page_num             dw  0
-    test_result          dw  1000h
+    test_result          dw  10000
     
 section .bss
     string              resb 256
     nhts                resb 8
     address             resb 4
-    storage_curr_len    resb 4
+    storage_curr_size   resb 4
     storage_buffer      resb 1
