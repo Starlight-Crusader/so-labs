@@ -155,7 +155,18 @@ option1:
     mov     dl, 0
 
     int     13h
-    jc      _error
+    ; jc      _error
+
+    push    ax
+
+    call    break_line
+
+    pop     ax
+
+    mov     al, '0'
+    add     al, ah
+    mov     ah, 0eh
+    int     10h
 
     jmp     _terminate
 
@@ -220,7 +231,23 @@ option2:
     mov     dl, 0
 
     int     13h
-    jc      _error
+    ; jc      _error
+
+    push    ax
+; calculate the number of sectors to write
+
+    xor     dx, dx
+    mov     ax, [storage_curr_size]
+    mov     bx, 512
+    div     bx
+    call    break_line
+
+    pop     ax
+
+    mov     al, '0'
+    add     al, ah
+    mov     ah, 0eh
+    int     10h
 
     ; print the data read
 
@@ -237,6 +264,8 @@ option2:
 
     mov     ax, 1301h
     int     10h
+
+    ; call    paginated_output
 
     jmp     _terminate
 
@@ -257,20 +286,67 @@ option3:
 
     call    read_hts_address
 
+    ; print "N = "
+
+    call    get_cursor_pos
+
+    inc     dh
+    mov     dl, 0
+
+    mov     ax, 0
+    mov     es, ax
+    mov     si, in_awaits_str1
+    add     si, str1_awaits_len1
+    mov     bp, si
+
+    mov     bl, 07h
+    mov     cx, str1_awaits_len2
+
+    mov     ax, 1301h
+    int     10h
+
+    ; read user input (n)
+
+    call    read_input
+
+    ; convert ascii read to an integer
+
+    mov     di, nhts
+    mov     si, storage_buffer
+    call    atoi
+
+    ; calculate the number of sectors to write
+
+    xor     dx, dx
+    mov     ax, [nhts]
+    mov     bx, 512
+    div     bx
+
     ; write data to floppy
 
     mov     es, [address]
     mov     bx, [address + 2]
 
     mov     ah, 03h
-    mov     al, 1
+    inc     al
     mov     ch, [nhts + 4]
     mov     cl, [nhts + 6]
     mov     dh, [nhts + 2]
     mov     dl, 0
 
     int     13h
-    jc      _error
+    ; jc      _error
+
+    push    ax
+
+    call    break_line
+
+    pop     ax
+
+    mov     al, '0'
+    add     al, ah
+    mov     ah, 0eh
+    int     10h
 
     jmp     _terminate
 
@@ -341,6 +417,61 @@ read_input:
         je      typing
 
         mov     byte [si], 0
+
+        ret
+
+; paginated output for 2.2
+
+paginated_output:
+    mov     es, [address]
+    mov     bp, [address + 2]
+
+    mov     ax, [nhts]
+    mov     cx, 512
+
+    imul    ax, cx
+    mov     [pag_output_len], ax
+
+    xor     cx, cx
+
+    paginated_output_loop:     
+        ; advance page
+
+        inc     word [page_num]
+
+        mov     ah, 05h
+        mov     al, [page_num]
+        int     10h
+
+        ; print 80*25 = 2000 char-s from the data read
+
+        mov     bh, [page_num]
+        mov     dh, 0
+        mov     dl, 0
+
+        push    cx
+
+        mov     bl, 07h
+        mov     cx, 2000
+
+        mov     ax, 1301h
+        int     10h
+
+        ; advance pointers and counters
+
+        pop     cx
+        add     cx, 2000
+        add     bp, 2000
+
+        wait_for_page_advance_signal:
+            mov     ah, 00h
+            int     16h
+
+            cmp     al, 20h
+            jne     wait_for_page_advance_signal
+
+        cmp     cx, [pag_output_len]
+        jl      paginated_output_loop
 
         ret
 
@@ -575,7 +706,7 @@ read_hts_address:
     mov     bp, si
 
     mov     bl, 07h
-    mov     cx, str1_awaits_len3 + 1
+    mov     cx, str1_awaits_len3
 
     mov     ax, 1301h
     int     10h
@@ -645,9 +776,7 @@ _terminate:
         cmp     al, 0dh
         jne     wait_for_confirm
 
-    mov     ax, [page_num]
-    inc     ax
-    mov     [page_num], ax
+    inc     word [page_num]
 
     mov     ah, 05h
     mov     al, [page_num]
@@ -730,6 +859,8 @@ print_in_buff:
 ; Data declaration and initialization
 
 reset_memory:
+    mov     word [pag_output_len], 0
+
     mov     ah, 00h
     int     13h
 
@@ -789,7 +920,7 @@ section .data
     in_awaits_str1       dd "STRING = N = {H, T, S} (one value per line)", 3ah
     str1_awaits_len1     equ 9
     str1_awaits_len2     equ 4
-    str1_awaits_len3     equ 30
+    str1_awaits_len3     equ 31
 
     in_awaits_str2       dd "SEGMENT (XXXX) = OFFSET (YYYY) = "
     str2_awaits_len1     equ 17
@@ -798,8 +929,10 @@ section .data
     prompt_start         dd ">>> "
     prompt_start_len     equ 4
 
-    page_num             dw  0
-    test_result          dw  10000
+    page_num             dw 0
+    test_result          dw 10000
+
+    pag_output_len       dw 0
     
 section .bss
     string              resb 256
