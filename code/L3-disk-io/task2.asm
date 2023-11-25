@@ -129,6 +129,7 @@ option1:
 
     mov     si, string
     call    fill_storage_buffer
+    
     ; calculate the number of sectors to write
 
     xor     dx, dx
@@ -154,18 +155,15 @@ option1:
     mov     dl, 0
 
     int     13h
-    ; jc      _error
 
-    push    ax
+    ; print error code
+    
+    call    display_error_code
 
-    call    break_line
+    ; print string read
 
-    pop     ax
-
-    mov     al, '0'
-    add     al, ah
-    mov     ah, 0eh
-    int     10h
+    mov     si, string
+    call    print_buff
 
     jmp     _terminate
 
@@ -230,12 +228,10 @@ option2:
     mov     dl, 0
 
     int     13h
-    ; jc      _error
 
-    mov     al, '0'
-    add     al, ah
-    mov     ah, 0eh
-    int     10h
+    ; print error code
+    
+    call    display_error_code
 
     ; print the data read
 
@@ -305,6 +301,22 @@ option3:
     mov     si, storage_buffer
     call    atoi
 
+    ; print the data to write
+
+    call    get_cursor_pos
+
+    inc     dh
+    mov     dl, 0
+
+    mov     es, [address]
+    mov     bp, [address + 2]
+
+    mov     bl, 07h
+    mov     cx, [nhts]
+
+    mov     ax, 1301h
+    int     10h
+
     ; calculate the number of sectors to write
 
     xor     dx, dx
@@ -324,18 +336,8 @@ option3:
     mov     dh, [nhts + 2]
     mov     dl, 0
     int     13h
-    ; jc      _error
 
-    push    ax
-
-    call    break_line
-
-    pop     ax
-
-    mov     al, '0'
-    add     al, ah
-    mov     ah, 0eh
-    int     10h
+    call    display_error_code
 
     jmp     _terminate
 
@@ -618,6 +620,33 @@ get_cursor_pos:
 
     ret
 
+display_error_code:
+    push    ax
+
+    call    get_cursor_pos
+
+    inc     dh
+    mov     dl, 0
+
+    mov     ax, 0
+    mov     es, ax
+    mov     bp, err_code_msg
+
+    mov     bl, 07h
+    mov     cx, err_code_msg_len
+
+    mov     ax, 1301h
+    int     10h
+
+    pop     ax
+
+    mov     al, '0'
+    add     al, ah
+    mov     ah, 0eh
+    int     10h
+
+    ret
+
 ; Addresses reading subprocesses
 
 read_ram_address:
@@ -813,32 +842,34 @@ conv_check:
     check_end:
         ret
  
-print_in_buff:
-    mov     ah, 0eh
-    mov     al, 20h
-    int     10h
+print_buff:
+    push    si
+    mov     cx, 0
 
-    mov     ah, 0eh
-    mov     al, 3eh
-    int     10h
+    find_buffer_end:
+        cmp     byte [si], 0
+        je      buffer_end_found
 
-    mov     ah, 0eh
-    mov     al, 3eh
-    int     10h
+        inc     si
+        inc     cx
 
-    mov     ah, 0eh
-    mov     al, 20h
-    int     10h
+        jmp     find_buffer_end
+
+    buffer_end_found:
+        pop     si
+        push    cx
 
     call    get_cursor_pos
+
+    inc     dh
+    mov     dl, 0
  
 	mov     ax, 0
     mov     es, ax
-    mov     bp, storage_buffer
+    mov     bp, si
 
     mov     bl, 07h
-    sub     si, storage_buffer
-    mov     cx, si
+    pop     cx
 
     mov     ax, 1301h
     int     10h
@@ -918,6 +949,9 @@ section .data
     in_awaits_str2       dd "SEGMENT (XXXX) = OFFSET (YYYY) = "
     str2_awaits_len1     equ 17
     str2_awaits_len2     equ 16
+
+    err_code_msg         dd "EC="
+    err_code_msg_len     equ 3
 
     prompt_start         dd ">>> "
     prompt_start_len     equ 4
