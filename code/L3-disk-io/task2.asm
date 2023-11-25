@@ -232,17 +232,6 @@ option2:
     int     13h
     ; jc      _error
 
-    push    ax
-; calculate the number of sectors to write
-
-    xor     dx, dx
-    mov     ax, [storage_curr_size]
-    mov     bx, 512
-    div     bx
-    call    break_line
-
-    pop     ax
-
     mov     al, '0'
     add     al, ah
     mov     ah, 0eh
@@ -255,14 +244,11 @@ option2:
     inc     dh
     mov     dl, 0
 
-    mov     ax, 0
-    mov     es, ax
-    mov     si, in_awaits_str1
-    add     si, str1_awaits_len1
-    mov     bp, si
+    mov     es, [address]
+    mov     bp, [address + 2]
 
     mov     bl, 07h
-    mov     cx, str1_awaits_len2
+    mov     cx, 512
 
     mov     ax, 1301h
     int     10h
@@ -869,7 +855,7 @@ reset_memory:
 
     mov     si, storage_buffer
     mov     di, storage_buffer + 512
-    call    reset_buffer
+    call    clear_buffer
 
     mov     si, string
     mov     di, string + 256
@@ -887,21 +873,13 @@ reset_memory:
     mov     di, pag_output_len + 4
     call    clear_buffer
 
-    mov     si, big_buffer_len
-    mov     di, big_buffer_len + 4
-    call    clear_buffer
-
-    mov     si, big_buffer
-    mov     di, big_buffer + 1
-    call    clear_buffer
-
     mov     si, storage_curr_size
     mov     di, storage_curr_size + 4
-    call    reset_buffer
+    call    clear_buffer
 
     mov     si, storage_buffer
     mov     di, storage_buffer + 1
-    call    reset_buffer
+    call    clear_buffer
 
     call    reset_registers
 
