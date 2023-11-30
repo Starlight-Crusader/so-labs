@@ -46,9 +46,11 @@ _start:
 
     jmp     _error
 
-; 2.1 BEGINNING
+
+; 2.1
 
 option1:
+
     ; display the key read
 
     mov     ah, 0eh
@@ -78,7 +80,7 @@ option1:
 
     call    read_input
 
-    ; save the string to its own buffer
+    ; save the string read to its own buffer
 
     mov     si, storage_buffer
     mov     di, string
@@ -160,16 +162,24 @@ option1:
     
     call    display_error_code
 
-    ; print string read
+    ; print the string read
+
+    call    get_cursor_pos
+
+    mov     ah, 02h
+    inc     dh
+    int     10h
 
     mov     si, string
-    call    print_buff
+    call    display_buffer_contents
 
     jmp     _terminate
 
-; 2.2 BEGINNING
+
+; 2.2
 
 option2:
+
     ; display the key read
 
     mov     ah, 0eh
@@ -235,27 +245,15 @@ option2:
 
     ; print the data read
 
-    call    get_cursor_pos
-
-    inc     dh
-    mov     dl, 0
-
-    mov     es, [address]
-    mov     bp, [address + 2]
-
-    mov     bl, 07h
-    mov     cx, 512
-
-    mov     ax, 1301h
-    int     10h
-
-    ; call    paginated_output
+    call    paginated_output
 
     jmp     _terminate
 
-; 2.3 BEGINNING
+
+; 2.3
 
 option3:
+
     ; display the key read
 
     mov     ah, 0eh
@@ -317,6 +315,10 @@ option3:
     mov     ax, 1301h
     int     10h
 
+    ; transfer n bytes to the write buffer
+
+    call    copy_nbytes
+
     ; calculate the number of sectors to write
 
     xor     dx, dx
@@ -326,8 +328,9 @@ option3:
 
     ; write data to floppy
 
-    mov     es, [address]
-    mov     bx, [address + 2]
+    xor     ax, ax
+    mov     es, ax
+    mov     bx, storage_buffer
 
     mov     ah, 03h
     inc     al
@@ -342,15 +345,19 @@ option3:
     jmp     _terminate
 
 
-; Complex I/O subprocesses
+; The typing subroutine
 
 read_input:
     mov     si, storage_buffer
     call    get_cursor_pos
 
     typing:
+        ; read the key pressed
+
         mov     ah, 00h
         int     16h
+
+        ; handle special keys
 
         cmp     al, 08h
 	    je      hdl_backspace
@@ -358,11 +365,17 @@ read_input:
 	    cmp     al, 0dh
 	    je      hdl_enter
 
+        ; prevent program form reading more than 256 characters
+
         cmp     si, storage_buffer + 256
         je      typing
 
+        ; save the character read to the buffer
+
         mov     [si], al
 	    inc     si
+
+        ; display the character read
 
         mov     ah, 0eh
 	    int     10h
@@ -370,13 +383,22 @@ read_input:
 	    jmp     typing
 
     hdl_backspace:
+
+        ; if the buffer is empty, ignore backspace
+
 	    cmp     si, storage_buffer
 	    je      typing
+
+        ; else erase the previous character from the buffer
 
 	    dec     si
     	mov     byte [si], 0
 
+        ; and print a blank space over it on the screen
+
         call    get_cursor_pos
+
+        ; if at the start of the second+ line return to the previous row and proceed in the same manner
 
 	    cmp     dl, 0
         je      prev_line
@@ -407,25 +429,38 @@ read_input:
         cmp     si, storage_buffer
         je      typing
 
+        ; ensure that the buffer ends with an empty byte
+
         mov     byte [si], 0
 
         ret
 
-; paginated output for 2.2
+
+; The paginated output for 2.2
 
 paginated_output:
+
+    ; calculate how many '#' include a segment of the progress bar
+
+    xor     dx, dx
+    mov     ax, 80
+    mov     bx, [nhts]
+    div     bx
+    inc     ax
+    mov     [progr_segment_len], ax
+
+    ; setup the RAM pointer
+
     mov     es, [address]
     mov     bp, [address + 2]
 
-    mov     ax, [nhts]
-    mov     cx, 512
+    ; setup the counter
 
-    imul    ax, cx
-    mov     [pag_output_len], ax
+    mov     cx, 1
 
-    xor     cx, cx
+    paginated_output_loop:
+        push    cx
 
-    paginated_output_loop:     
         ; advance page
 
         inc     word [page_num]
@@ -434,16 +469,44 @@ paginated_output:
         mov     al, [page_num]
         int     10h
 
-        ; print 80*25 = 2000 char-s from the data read
+        ; draw progress bar
 
+        mov     ah, 02h
         mov     bh, [page_num]
         mov     dh, 0
         mov     dl, 0
+        int     10h
 
-        push    cx
+        mov     ah, 09h
+        mov     al, 23h
+        mov     bh, [page_num]
+        mov     bl, 07h
+        imul    cx, [progr_segment_len]
+        int     10h
+
+        push    es
+        push    bp
+
+        call    break_line
+
+        pop     bp
+        pop     es
+
+        mov     ah, 09h
+        mov     al, 2dh
+        mov     bh, [page_num]
+        mov     bl, 07h
+        mov     cx, 80
+        int     10h
+
+        ; print 1 sector - 512 char-s
+
+        call    get_cursor_pos
+        inc     dh
+        mov     dl, 0
 
         mov     bl, 07h
-        mov     cx, 2000
+        mov     cx, 512
 
         mov     ax, 1301h
         int     10h
@@ -451,36 +514,57 @@ paginated_output:
         ; advance pointers and counters
 
         pop     cx
-        add     cx, 2000
-        add     bp, 2000
+        inc     cx
+        add     bp, 512
 
         wait_for_page_advance_signal:
+
+            ; read a keypress
+
             mov     ah, 00h
             int     16h
+
+            ; if ENTER - return to the main routine
+
+            cmp     al, 0dh
+            je      stop_paginated_output
+
+            ; if SPACE - advance to the next page
 
             cmp     al, 20h
             jne     wait_for_page_advance_signal
 
-        cmp     cx, [pag_output_len]
-        jl      paginated_output_loop
+        cmp     word cx, [nhts]
+        jle     paginated_output_loop
 
+    stop_paginated_output:
         ret
+
 
 ; In. number conversions
 
 atoi:
     atoi_conv_loop:
+
+        ; check if all the digits were converted
+
         cmp     byte [si], 0
         je      atoi_conv_done
+
+        ; convert the character's bytes to the number equivalent
 
         xor     ax, ax
         mov     al, [si]
         sub     al, '0'
 
+        ; shift all the digits one place left and put a new digit at the first place
+
         mov     bx, [di]
         imul    bx, 10
         add     bx, ax
         mov     [di], bx
+
+        ; advance to pint at the next charactr representing some digit
 
         inc     si
 
@@ -491,6 +575,10 @@ atoi:
 
 atoh:
     atoh_conv_loop:
+
+        ; essentially works the same as the subroutine above, but also need to consider some letters that need to be converted ...
+        ; into numerical values form 10 to 15
+
         cmp     byte [si], 0
         je      atoh_conv_done
 
@@ -519,13 +607,14 @@ atoh:
     atoh_conv_done:
         ret
 
-; With this subprocess, copy the string n times in a separate buffer to write on floppy
+; Writing buffer filling suproutines
 
 fill_storage_buffer:
     push    si
     mov     cx, 0
 
     find_end:
+
         cmp     byte [si], 0
         je      end_found
 
@@ -539,6 +628,12 @@ fill_storage_buffer:
         mov     di, storage_buffer
 
     copy_string_to_buffer_loop:
+        cmp     word [nhts], 0
+        jle     copying_finsihed
+
+        ; when we call movsb; si (pointer at the buffer copied), dx (pointer at the target), ...
+        ; cx (number of bytes to be copied) advance automatically so we need to preserve some values
+
         push    cx
         push    si
         rep     movsb
@@ -549,21 +644,27 @@ fill_storage_buffer:
         dec     word [nhts]
         add     word [storage_curr_size], cx
 
-        cmp     word [nhts], 0
-        jg      copy_string_to_buffer_loop
+        jmp     copy_string_to_buffer_loop
 
-    push    di
-    sub     di, storage_buffer
-    mov     ax, di
-    pop     di
+    copying_finsihed:
 
-    xor     dx, dx
-    mov     bx, 512
-    div     bx
-    
-    mov     cx, 0
+        ; calculate how many bytes will be left empty in the last sector
+
+        push    di
+        sub     di, storage_buffer
+        mov     ax, di
+        pop     di
+
+        xor     dx, dx
+        mov     bx, 512
+        div     bx
+
+        mov     cx, 0
+
+    ; fill this space with empty bytes (or any other value you would like to see there)
 
     nulls:
+
         mov     byte [edi], 0
         
         inc     di
@@ -575,7 +676,32 @@ fill_storage_buffer:
     return:
         ret
 
+; is used in 2.3 to prepare exactly Q bytes for writing to the floppy, is pretty straightforward ...
+
+copy_nbytes:
+    mov     cx, 0
+    
+    mov     es, [address]
+    mov     bp, [address + 2]
+
+    mov     si, storage_buffer
+
+    copy_bytes_loop:
+        cmp     cx, [nhts]
+        jge     copy_bytes_complete
+
+        xor     ax, ax
+        mov     al, es:[bp]
+        mov     [si], al
+        
+        inc     bp
+        inc     cx
+
+    copy_bytes_complete:
+        ret
+
 ; Useful stuff
+; using the int 10h 1301h to advance the row helps to scroll the screen automatically
 
 break_line:
     call    get_cursor_pos
@@ -620,36 +746,11 @@ get_cursor_pos:
 
     ret
 
-display_error_code:
-    push    ax
-
-    call    get_cursor_pos
-
-    inc     dh
-    mov     dl, 0
-
-    mov     ax, 0
-    mov     es, ax
-    mov     bp, err_code_msg
-
-    mov     bl, 07h
-    mov     cx, err_code_msg_len
-
-    mov     ax, 1301h
-    int     10h
-
-    pop     ax
-
-    mov     al, '0'
-    add     al, ah
-    mov     ah, 0eh
-    int     10h
-
-    ret
 
 ; Addresses reading subprocesses
 
 read_ram_address:
+
     ; print "SEGMENT (XXXX) = "
 
     call    get_cursor_pos
@@ -709,6 +810,7 @@ read_ram_address:
     ret
 
 read_hts_address:
+
     ; print "{H, T, S} (one value per line):"
 
     call    get_cursor_pos
@@ -764,11 +866,14 @@ read_hts_address:
 
     ret
 
+
 ; Trailer subprocesses
 
 _error:
     call    get_cursor_pos
     call    break_line
+
+    ; print "ERR" using the stack
 
     push    52h
     push    52h
@@ -801,6 +906,7 @@ _terminate:
     int     10h
 
     jmp     _start
+
 
 ; Debug subprocesses
 
@@ -841,8 +947,11 @@ conv_check:
 
     check_end:
         ret
+
+
+; Small printing subprocesses for the requested by the task outputs
  
-print_buff:
+display_buffer_contents:
     push    si
     mov     cx, 0
 
@@ -876,17 +985,49 @@ print_buff:
 
     ret
 
+display_error_code:
+    push    ax
+
+    ; print "EC="
+
+    call    get_cursor_pos
+
+    inc     dh
+    mov     dl, 0
+
+    mov     ax, 0
+    mov     es, ax
+    mov     bp, err_code_msg
+
+    mov     bl, 07h
+    mov     cx, err_code_msg_len
+
+    mov     ax, 1301h
+    int     10h
+
+    ; print the error code (an integer)
+
+    pop     ax
+
+    mov     al, '0'
+    add     al, ah
+    mov     ah, 0eh
+    int     10h
+
+    ret
+
+
 ; Data declaration and initialization
 
 reset_memory:
-    mov     word [pag_output_len], 0
+
+    ; it seems that force recalibration fixes some errors occuring when we read
+    ; freshly written sectors
 
     mov     ah, 00h
     int     13h
 
-    mov     si, storage_buffer
-    mov     di, storage_buffer + 512
-    call    clear_buffer
+    ; just filling all the buffers with some empty bytes to prevent any possible confusions
 
     mov     si, string
     mov     di, string + 256
@@ -898,10 +1039,6 @@ reset_memory:
 
     mov     si, address
     mov     di, address + 4
-    call    clear_buffer
-
-    mov     si, pag_output_len
-    mov     di, pag_output_len + 4
     call    clear_buffer
 
     mov     si, storage_curr_size
@@ -923,6 +1060,7 @@ reset_registers:
     xor     dx, dx
     xor     si, si
     xor     di, di
+    mov     es, ax
     xor     bp, bp
 
     ret
@@ -959,7 +1097,7 @@ section .data
     page_num             dw 0
     test_result          dw 10000
 
-    pag_output_len       dw 0
+    progr_segment_len    dw 0
     
 section .bss
     string              resb 256

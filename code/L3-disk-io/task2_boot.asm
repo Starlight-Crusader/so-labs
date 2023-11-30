@@ -8,7 +8,7 @@ mov     es, ax
 mov     bx, 7e00h
 
 mov     ah, 02h
-mov     al, 4
+mov     al, 5
 mov     ch, 0
 mov     cl, 2
 mov     dh, 0
