@@ -317,6 +317,7 @@ option3:
 
     ; transfer n bytes to the write buffer
 
+    call    reset_registers
     call    copy_nbytes
 
     ; calculate the number of sectors to write
@@ -328,9 +329,13 @@ option3:
 
     ; write data to floppy
 
+    push    ax
+
     xor     ax, ax
     mov     es, ax
     mov     bx, storage_buffer
+
+    pop     ax
 
     mov     ah, 03h
     inc     al
@@ -517,6 +522,9 @@ paginated_output:
         inc     cx
         add     bp, 512
 
+        cmp     word cx, [nhts]
+        jle     paginated_output_loop
+
         wait_for_page_advance_signal:
 
             ; read a keypress
@@ -533,9 +541,6 @@ paginated_output:
 
             cmp     al, 20h
             jne     wait_for_page_advance_signal
-
-        cmp     word cx, [nhts]
-        jle     paginated_output_loop
 
     stop_paginated_output:
         ret
@@ -679,6 +684,13 @@ fill_storage_buffer:
 ; is used in 2.3 to prepare exactly Q bytes for writing to the floppy, is pretty straightforward ...
 
 copy_nbytes:
+    xor     dx, dx
+    xor     bx, bx
+
+    mov     ax, [nhts]
+    mov     bx, 512
+    div     bx
+
     mov     cx, 0
     
     mov     es, [address]
@@ -688,17 +700,28 @@ copy_nbytes:
 
     copy_bytes_loop:
         cmp     cx, [nhts]
-        jge     copy_bytes_complete
+        jge     inflate_with_zeros
 
         xor     ax, ax
-        mov     al, es:[bp]
+        mov     al, [es:bp]
         mov     [si], al
         
         inc     bp
+        inc     si
         inc     cx
 
-    copy_bytes_complete:
-        ret
+        jmp     copy_bytes_loop
+
+    inflate_with_zeros:
+        mov     byte [si], 0
+            
+        inc     si
+        inc     dx
+
+        cmp     dx, 512
+        jl      inflate_with_zeros
+    
+    ret
 
 ; Useful stuff
 ; using the int 10h 1301h to advance the row helps to scroll the screen automatically
