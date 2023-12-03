@@ -452,63 +452,72 @@ paginated_output:
     mov     bx, [nhts]
     div     bx
     inc     ax
-    mov     [progr_segment_len], ax
+    mov     [pb_segment_len], ax
 
     ; setup the RAM pointer
 
     mov     es, [address]
     mov     bp, [address + 2]
 
-    ; setup the counter
-
     mov     cx, 1
 
     paginated_output_loop:
+        wait_for_page_advance_signal:
+
+            ; read a keypress
+
+            mov     ah, 00h
+            int     16h
+
+            ; if SPACE - proceed to the next page
+
+            cmp     al, 20h
+            jne     wait_for_page_advance_signal
+
+        push    bp
+        push    es
+
         push    cx
 
-        ; advance page
+        ; prepare a clean page
 
-        inc     word [page_num]
+        call    clear_screen
 
-        mov     ah, 05h
-        mov     al, [page_num]
-        int     10h
+        pop     cx
+        push    cx
 
         ; draw progress bar
 
+        mov     ah, 09h
+        mov     al, 23h
+        mov     bh, 0
+        mov     bl, 07h
+        imul    cx, [pb_segment_len]
+        int     10h
+
         mov     ah, 02h
-        mov     bh, [page_num]
-        mov     dh, 0
+        mov     bh, 0
+        mov     dh, 1
         mov     dl, 0
         int     10h
 
         mov     ah, 09h
-        mov     al, 23h
-        mov     bh, [page_num]
-        mov     bl, 07h
-        imul    cx, [progr_segment_len]
-        int     10h
-
-        push    es
-        push    bp
-
-        call    break_line
-
-        pop     bp
-        pop     es
-
-        mov     ah, 09h
         mov     al, 2dh
-        mov     bh, [page_num]
+        mov     bh, 0
         mov     bl, 07h
         mov     cx, 80
         int     10h
 
         ; print 1 sector - 512 char-s
 
-        call    get_cursor_pos
-        inc     dh
+        mov     bh, 0
+        mov     dh, 2
         mov     dl, 0
+
+        pop     cx
+        pop     es
+        pop     bp
+        push    cx
 
         mov     bl, 07h
         mov     cx, 512
@@ -522,25 +531,8 @@ paginated_output:
         inc     cx
         add     bp, 512
 
-        cmp     word cx, [nhts]
+        cmp     cx, [nhts]
         jle     paginated_output_loop
-
-        wait_for_page_advance_signal:
-
-            ; read a keypress
-
-            mov     ah, 00h
-            int     16h
-
-            ; if ENTER - return to the main routine
-
-            cmp     al, 0dh
-            je      stop_paginated_output
-
-            ; if SPACE - advance to the next page
-
-            cmp     al, 20h
-            jne     wait_for_page_advance_signal
 
     stop_paginated_output:
         ret
@@ -764,7 +756,40 @@ break_line_with_prompt:
 
 get_cursor_pos:
     mov     ah, 03h
-    mov     bh, [page_num]
+    mov     bh, 0
+    int     10h
+
+    ret
+
+clear_screen:
+    mov     ah, 02h
+    mov     bh, 0
+    mov     dh, 0
+    mov     dl, 0
+    int     10h
+
+    mov     cx, 20
+
+    clear_screen_loop:
+        push    cx
+
+        mov     ah, 09h
+        mov     al, 20h
+        mov     bh, 0
+        mov     bl, 07h
+        mov     cx, 80
+        int     10h
+
+        call    break_line
+
+        pop     cx
+        dec     cx
+        jnz     clear_screen_loop
+
+    mov     ah, 02h
+    mov     bh, 0
+    mov     dh, 0
+    mov     dl, 0
     int     10h
 
     ret
@@ -922,11 +947,7 @@ _terminate:
         cmp     al, 0dh
         jne     wait_for_confirm
 
-    inc     word [page_num]
-
-    mov     ah, 05h
-    mov     al, [page_num]
-    int     10h
+    call    clear_screen
 
     jmp     _start
 
@@ -1072,6 +1093,8 @@ reset_memory:
     mov     di, storage_buffer + 1
     call    clear_buffer
 
+    mov     byte [pb_segment_len], 00h
+
     call    reset_registers
 
     ret
@@ -1117,10 +1140,8 @@ section .data
     prompt_start         dd ">>> "
     prompt_start_len     equ 4
 
-    page_num             dw 0
     test_result          dw 10000
-
-    progr_segment_len    dw 0
+    pb_segment_len    db 0
     
 section .bss
     string              resb 256
