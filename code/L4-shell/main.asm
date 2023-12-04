@@ -42,10 +42,6 @@ _start:
     cmp     byte [command], 0
     jne     command_identified
 
-    mov     ah, 0eh
-    mov     al, 48
-    int     10h
-
     ; if went through the entire list of known-s ...
 
     jmp     unknown_err_display
@@ -180,6 +176,8 @@ read_input:
 
         mov     byte [si], 0
 
+        call    break_line
+
         ret
 
 ; ------------------------------
@@ -205,18 +203,17 @@ check_command:
         jne     not_identified
 
     check_command_letters:
+        dec     cx
+        jz      identified
+
         mov     ax, [si]
         mov     bx, [di]
 
         cmp     ax, bx
         jne     not_identified
 
-        cmp     cx, 1
-        jg      identified
-        
         inc     si
         inc     di
-        dec     cx
 
         jmp     check_command_letters
 
@@ -247,28 +244,24 @@ interpret_command:
         jmp     interpretation_end
 
     interpret_time:
-        call    break_line
         call    get_time
+        call    time_bytes_to_ascii
 
-        mov     ah, 0eh
-        mov     al, [hours]
-        add     al, '0'
-        int     10h
+        call    get_date
+        call    date_bytes_to_ascii
 
-        ; get time via call
+        mov     si, time_string
+        mov     cx, time_string_len
+        call    print_str
 
-        ; convert bits to ascii
-
-        ; display ascii
+        mov     si, dt_ascii_buffer
+        mov     cx, 16
+        call    print_str
 
         jmp     interpretation_end
 
     interpret_clear:
-        inc     byte [page_num]
-
-        mov     ah, 05h
-        mov     al, [page_num]
-        int     10h
+        call    clear_screen
 
         jmp     interpretation_end
 
@@ -277,14 +270,148 @@ interpret_command:
 
 ; ------------------------------
 
+clear_screen:
+    mov     ah, 02h
+    mov     bh, 0
+    mov     dh, 0
+    mov     dl, 0
+    int     10h
+
+    mov     cx, 20
+
+    clear_screen_loop:
+        push    cx
+
+        mov     ah, 09h
+        mov     al, 20h
+        mov     bh, 0
+        mov     bl, 07h
+        mov     cx, 80
+        int     10h
+
+        call    break_line
+
+        pop     cx
+        dec     cx
+        jnz     clear_screen_loop
+
+    mov     ah, 02h
+    mov     bh, 0
+    mov     dh, 0
+    mov     dl, 0
+    int     10h
+
+    ret
+
 get_time:
 
-    ; int 1ah ah=02h - read time from CMOS RTS
+    ; int 1ah ah=02h - read time from CMOS RTC
 
     mov     ah, 02h
     int     1ah
 
     ; ch - hours, cl - minutes, dh - seconds (all in BCD)
+
+    ret
+
+get_date:
+
+    ; int 1ah ah=04h - read date from from CMOS RTC
+
+    mov     ah, 04h
+    int     1ah
+
+    ; ch - century, cl - year, dh - month, dl - day (all in BCD)
+
+    ret
+
+time_bytes_to_ascii:
+
+    ; convert and save hour
+
+    xor     ax, ax
+    mov     al, ch
+    mov     bl, 16
+    div     bl
+
+    add     al, 30h
+    add     ah, 30h
+
+    mov     [dt_ascii_buffer + 11], al
+    mov     [dt_ascii_buffer + 12], ah
+    mov     byte [dt_ascii_buffer + 13], 3ah
+
+    ; convert and save minute
+
+    xor     ax, ax
+    mov     al, cl
+    mov     bl, 16
+    div     bl
+
+    add     al, 30h
+    add     ah, 30h
+
+    mov     [dt_ascii_buffer + 14], al
+    mov     [dt_ascii_buffer + 15], ah
+
+    ret
+
+date_bytes_to_ascii:
+
+    ; convert and save day
+
+    xor     ax, ax
+    mov     al, dl
+    mov     bl, 16
+    div     bl
+
+    add     al, 30h
+    add     ah, 30h
+
+    mov     [dt_ascii_buffer + 0], al
+    mov     [dt_ascii_buffer + 1], ah
+    mov     byte [dt_ascii_buffer + 2], 2fh
+
+    ; convert and save month
+
+    xor     ax, ax
+    mov     al, dh
+    mov     bl, 16
+    div     bl
+
+    add     al, 30h
+    add     ah, 30h
+
+    mov     [dt_ascii_buffer + 3], al
+    mov     [dt_ascii_buffer + 4], ah
+    mov     byte [dt_ascii_buffer + 5], 2fh
+
+    ; convert and save century
+
+    xor     ax, ax
+    mov     al, ch
+    mov     bl, 16
+    div     bl
+
+    add     al, 30h
+    add     ah, 30h
+
+    mov     [dt_ascii_buffer + 6], al
+    mov     [dt_ascii_buffer + 7], ah
+
+    ; convert and save year
+
+    xor     ax, ax
+    mov     al, cl
+    mov     bl, 16
+    div     bl
+
+    add     al, 30h
+    add     ah, 30h
+
+    mov     [dt_ascii_buffer + 8], al
+    mov     [dt_ascii_buffer + 9], ah
+    mov     byte [dt_ascii_buffer + 10], 20h
 
     ret
 
@@ -294,8 +421,6 @@ print_str:
     push    cx
 
     call    get_cursor_pos
-    inc     dh
-    mov     dl, 0
 
     xor     ax, ax
     mov     es, ax
@@ -310,19 +435,9 @@ print_str:
     ret
 
 unknown_err_display:
-    call    get_cursor_pos
-    inc     dh
-    mov     dl, 0
-
-    xor     ax, ax
-    mov     es, ax
-    mov     bp, error_string
-
-    mov     bl, 07h
+    mov     si, error_string
     mov     cx, error_string_len
-
-    mov     ax, 1301h
-    int     10h
+    call    print_str
 
     jmp     _terminate
 
@@ -330,7 +445,7 @@ unknown_err_display:
 
 get_cursor_pos:
     mov     ah, 03h
-    mov     bh, [page_num]
+    mov     bh, 0
     int     10h
 
     ret
@@ -357,8 +472,11 @@ about_string_len        equ 38
 
 ; ------------------------------
 
-time_command_name       dd "time"
-time_name_len           equ 4
+time_command_name       dd "datetime"
+time_name_len           equ 8
+
+time_string             dd "CMOS RTC - "
+time_string_len         equ 11
 
 ; ------------------------------
 
@@ -373,7 +491,6 @@ error_string_len        equ 16
 ; ------------------------------
 
 command                 db 0
-page_num                db 0
 
 hours                   db 0
 minutes                 db 0
@@ -383,4 +500,5 @@ seconds                 db 0
 
 section .bss
 
-input_buffer    resb 256
+input_buffer        resb 256
+dt_ascii_buffer     resb 16
