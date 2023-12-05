@@ -3,11 +3,16 @@ org 7e00h
 ; ==============================
 
 section .text
-    global _start
+    global  _start
 
 _start:
     call    break_line_for_input
     call    read_input
+
+    cmp     byte [input_buffer], 00h
+    je      cli_cycle_end
+
+    call    break_line
 
     ; check 'about'
 
@@ -49,43 +54,8 @@ _start:
     command_identified:
         call    interpret_command
 
-    jmp     _terminate
-
-; ------------------------------
-
-break_line:
-    call    get_cursor_pos
-    inc     dh
-    mov     dl, 0
-
-    xor     ax, ax
-    mov     es, ax
-    mov     bp, in_start_str
-
-    mov     bl, 07h
-    mov     cx, 0
-
-    mov     ax, 1301h
-    int     10h
-
-    ret
-
-break_line_for_input:
-    call    get_cursor_pos
-    inc     dh
-    mov     dl, 0
-
-    xor     ax, ax
-    mov     es, ax
-    mov     bp, in_start_str
-
-    mov     bl, 07h
-    mov     cx, in_start_str_len
-
-    mov     ax, 1301h
-    int     10h
-
-    ret
+    cli_cycle_end:
+        jmp     _terminate
 
 ; ------------------------------
 
@@ -169,14 +139,10 @@ read_input:
         jmp     typing
 
     hdl_enter:
-        cmp     si, input_buffer
-        je      typing
 
         ; ensure that the buffer ends with an empty byte
 
         mov     byte [si], 0
-
-        call    break_line
 
         ret
 
@@ -244,11 +210,37 @@ interpret_command:
         jmp     interpretation_end
 
     interpret_time:
-        call    get_time
-        call    time_bytes_to_ascii
-
         call    get_date
-        call    date_bytes_to_ascii
+
+        mov     al, dl
+        mov     si, dt_ascii_buffer + 0
+        call    bcd_to_ascii
+        mov     byte [dt_ascii_buffer + 2], 2fh
+
+        mov     al, dh
+        mov     si, dt_ascii_buffer + 3
+        call    bcd_to_ascii
+        mov     byte [dt_ascii_buffer + 5], 2fh
+
+        mov     al, ch
+        mov     si, dt_ascii_buffer + 6
+        call    bcd_to_ascii
+        
+        mov     al, cl
+        mov     si, dt_ascii_buffer + 8
+        call    bcd_to_ascii
+        mov     byte [dt_ascii_buffer + 10], 20h
+
+        call    get_time
+
+        mov     al, ch
+        mov     si, dt_ascii_buffer + 11
+        call    bcd_to_ascii
+        mov     byte [dt_ascii_buffer + 13], 3ah
+
+        mov     al, cl
+        mov     si, dt_ascii_buffer + 14
+        call    bcd_to_ascii
 
         mov     si, time_string
         mov     cx, time_string_len
@@ -269,39 +261,6 @@ interpret_command:
         ret
 
 ; ------------------------------
-
-clear_screen:
-    mov     ah, 02h
-    mov     bh, 0
-    mov     dh, 0
-    mov     dl, 0
-    int     10h
-
-    mov     cx, 20
-
-    clear_screen_loop:
-        push    cx
-
-        mov     ah, 09h
-        mov     al, 20h
-        mov     bh, 0
-        mov     bl, 07h
-        mov     cx, 80
-        int     10h
-
-        call    break_line
-
-        pop     cx
-        dec     cx
-        jnz     clear_screen_loop
-
-    mov     ah, 02h
-    mov     bh, 0
-    mov     dh, 0
-    mov     dl, 0
-    int     10h
-
-    ret
 
 get_time:
 
@@ -325,95 +284,18 @@ get_date:
 
     ret
 
-time_bytes_to_ascii:
-
-    ; convert and save hour
-
-    xor     ax, ax
-    mov     al, ch
-    mov     bl, 16
+bcd_to_ascii:
+    xor     ah, ah
+    mov     bl, 10h
     div     bl
 
     add     al, 30h
     add     ah, 30h
 
-    mov     [dt_ascii_buffer + 11], al
-    mov     [dt_ascii_buffer + 12], ah
-    mov     byte [dt_ascii_buffer + 13], 3ah
+    mov     [si], al
+    mov     [si + 1], ah
 
-    ; convert and save minute
-
-    xor     ax, ax
-    mov     al, cl
-    mov     bl, 16
-    div     bl
-
-    add     al, 30h
-    add     ah, 30h
-
-    mov     [dt_ascii_buffer + 14], al
-    mov     [dt_ascii_buffer + 15], ah
-
-    ret
-
-date_bytes_to_ascii:
-
-    ; convert and save day
-
-    xor     ax, ax
-    mov     al, dl
-    mov     bl, 16
-    div     bl
-
-    add     al, 30h
-    add     ah, 30h
-
-    mov     [dt_ascii_buffer + 0], al
-    mov     [dt_ascii_buffer + 1], ah
-    mov     byte [dt_ascii_buffer + 2], 2fh
-
-    ; convert and save month
-
-    xor     ax, ax
-    mov     al, dh
-    mov     bl, 16
-    div     bl
-
-    add     al, 30h
-    add     ah, 30h
-
-    mov     [dt_ascii_buffer + 3], al
-    mov     [dt_ascii_buffer + 4], ah
-    mov     byte [dt_ascii_buffer + 5], 2fh
-
-    ; convert and save century
-
-    xor     ax, ax
-    mov     al, ch
-    mov     bl, 16
-    div     bl
-
-    add     al, 30h
-    add     ah, 30h
-
-    mov     [dt_ascii_buffer + 6], al
-    mov     [dt_ascii_buffer + 7], ah
-
-    ; convert and save year
-
-    xor     ax, ax
-    mov     al, cl
-    mov     bl, 16
-    div     bl
-
-    add     al, 30h
-    add     ah, 30h
-
-    mov     [dt_ascii_buffer + 8], al
-    mov     [dt_ascii_buffer + 9], ah
-    mov     byte [dt_ascii_buffer + 10], 20h
-
-    ret
+    ret 
 
 ; ------------------------------
 
@@ -450,17 +332,93 @@ get_cursor_pos:
 
     ret
 
+clear_screen:
+    mov     ah, 02h
+    mov     bh, 0
+    mov     dh, 0
+    mov     dl, 0
+    int     10h
+
+    mov     cx, 25
+
+    clear_screen_loop:
+        push    cx
+
+        mov     ah, 09h
+        mov     al, 20h
+        mov     bh, 0
+        mov     bl, 07h
+        mov     cx, 80
+        int     10h
+
+        call    break_line
+
+        pop     cx
+        dec     cx
+        jnz     clear_screen_loop
+
+    mov     ah, 02h
+    mov     bh, 0
+    mov     dh, 0
+    mov     dl, 0
+    int     10h
+
+    ret
+
+break_line:
+    call    get_cursor_pos
+    inc     dh
+    mov     dl, 0
+
+    xor     ax, ax
+    mov     es, ax
+    mov     bp, in_start_str
+
+    mov     bl, 07h
+    mov     cx, 1
+
+    mov     ax, 1301h
+    int     10h
+
+    ret
+
+break_line_for_input:
+    call    get_cursor_pos
+    inc     dh
+    mov     dl, 0
+
+    xor     ax, ax
+    mov     es, ax
+    mov     bp, in_start_str
+
+    mov     bl, 07h
+    mov     cx, in_start_str_len
+
+    mov     ax, 1301h
+    int     10h
+
+    ret
+
 ; ------------------------------
 
 _terminate:
-    jmp     _start
+    call    get_cursor_pos
+
+    cmp     dh, 22
+    jl      clear_not_needed
+
+    clear_needed:
+        call    clear_screen
+
+    clear_not_needed:
+        jmp     _start
 
 ; ==============================
 
 section .data
 
-in_start_str            dd ">>> "
-in_start_str_len        equ 4
+in_start_str            dd " >>> "
+in_start_str_len        equ 5
 
 ; ------------------------------
     

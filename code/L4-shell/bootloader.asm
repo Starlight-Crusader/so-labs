@@ -1,14 +1,17 @@
-org     7c00h
+org 7c00h
 
 section .text
+    global  _start
 
 _start:
+    mov     ah, 00h
+    int     13h
 
     ; print "Booting the sect. at HTS (one val. per line)"
 
-    mov     si, prompt_txt
-    mov     cx, prompt_txt_len1
-    call    print_str
+    mov     si, prompt_txt1
+    mov     cx, prompt_txt1_len
+    call    print_ln
 
     ; read HTS
 
@@ -16,28 +19,28 @@ _start:
 
     ; print "How many sect-s to load? - "
 
-    mov     si, prompt_txt
-    add     si, prompt_txt_len1
-    mov     cx, prompt_txt_len2
-    call    print_str
+    mov     si, prompt_txt2
+    mov     cx, prompt_txt2_len
+    call    print_ln
 
     ; read N
 
-    call    break_line_for_input
+    mov     si, in_start_str
+    mov     cx, in_start_str_len
+    call    print_ln
     call    read_input
 
     ; convert ascii read to an integer
 
     mov     di, nhts
-    mov     si, input_buffer
-    call    atoi
+    call    atoi_in_conv
 
     ; read the data from floppy
 
     mov     ah, 00h
     int     13h
 
-    xor     ax, ax
+    mov     ax, 0000h
     mov     es, ax
     mov     bx, 7e00h
 
@@ -53,7 +56,7 @@ _start:
     ; check the first 2 bytes for the signature (0xABCD)
 
     mov     ax, [es:bx]
-    cmp     ax, 0xABCD
+    cmp     ax, 0xE8E8
     jne     wrong_in_error
 
     ; check the last 2 bytes for the signature (0xCDEF)
@@ -67,10 +70,19 @@ _start:
     mov     ax, [es:bx]
     pop     bx
 
-    cmp     ax, 0xCDEF
+    cmp     ax, 0x5355
     jne     wrong_in_error
 
-    jmp     0000h:7e00h
+    mov     si, succ_msg
+    mov     cx, succ_msg_len
+    call    print_ln
+
+    mov     ah, 00h
+    int     16h
+
+    call    clear_screen
+
+    jmp     0000:7e00h
 
 read_input:
     mov     si, input_buffer
@@ -141,7 +153,9 @@ read_input:
 
         ret
 
-atoi:
+atoi_in_conv:
+    mov     si, input_buffer
+
     atoi_conv_loop:
 
         ; check if all the digits were converted
@@ -173,43 +187,7 @@ atoi:
 
 get_cursor_pos:
     mov     ah, 03h
-    mov     bh, [page_num]
-    int     10h
-
-    ret
-
-break_line:
-    call    get_cursor_pos
-
-    inc     dh
-    mov     dl, 0
-
-    mov     ax, 0
-    mov     es, ax
-    mov     bp, in_start_str
-
-    mov     bl, 07h
-    mov     cx, 0
-
-    mov     ax, 1301h
-    int     10h
-
-    ret
-
-break_line_for_input:
-    call    get_cursor_pos
-
-    inc     dh
-    mov     dl, 0
-
-    mov     ax, 0
-    mov     es, ax
-    mov     bp, in_start_str
-
-    mov     bl, 07h
-    mov     cx, in_start_str_len
-
-    mov     ax, 1301h
+    mov     bh, 0
     int     10h
 
     ret
@@ -218,40 +196,45 @@ read_hts_address:
 
     ; read user input (h)
 
-    call    break_line_for_input
+    mov     si, in_start_str
+    mov     cx, in_start_str_len
+    call    print_ln
     call    read_input
 
     ; convert ascii read to an integer
 
     mov     di, nhts + 2
-    mov     si, input_buffer
-    call    atoi
+    call    atoi_in_conv
 
     ; read user input (t)
 
-    call    break_line_for_input
+    mov     si, in_start_str
+    mov     cx, in_start_str_len
+    call    print_ln
     call    read_input
 
     ; convert ascii read to an integer
 
     mov     di, nhts + 4
-    mov     si, input_buffer
-    call    atoi
+    call    atoi_in_conv
 
     ; read user input (s)
 
-    call    break_line_for_input
+    mov     si, in_start_str
+    mov     cx, in_start_str_len
+    call    print_ln
     call    read_input
 
     ; convert ascii read to an integer
 
     mov     di, nhts + 6
-    mov     si, input_buffer
-    call    atoi
+    call    atoi_in_conv
 
     ret
 
-print_str:
+print_ln:
+    push    cx
+
     call    get_cursor_pos
     inc     dh
     mov     dl, 0
@@ -261,8 +244,42 @@ print_str:
     mov     bp, si
 
     mov     bl, 07h
+    pop     cx
 
     mov     ax, 1301h
+    int     10h
+
+    ret
+
+clear_screen:
+    call    ret_cursor
+    mov     dx, 8
+
+    clear_screen_loop:
+        mov     ah, 09h
+        mov     al, 20h
+        mov     bh, 0
+        mov     cx, 80
+        int     10h
+
+        push    dx
+        mov     si, in_start_str
+        mov     cx, 0
+        call    print_ln
+        pop     dx
+
+        dec     dx
+        jnz     clear_screen_loop
+
+    call    ret_cursor
+
+    ret
+
+ret_cursor:
+    mov     ah, 02h
+    mov     bh, 0
+    mov     dh, 0
+    mov     dl, 0
     int     10h
 
     ret
@@ -272,44 +289,41 @@ wrong_in_error:
     ; print the error msg.
 
     mov     si, in_err_txt
-    mov     cx, in_err_txt
-    call    print_str
+    mov     cx, in_err_txt_len
+    call    print_ln
 
     jmp     _terminate
 
 _terminate:
+    mov     word [nhts + 0], 0000h
+    mov     word [nhts + 2], 0000h
+    mov     word [nhts + 4], 0000h
+    mov     word [nhts + 6], 0000h
 
     ; wait for any key to be pressed
 
     mov     ah, 00h
     int     16h
 
-    ; advance the video page
-
-    inc     word [page_num]
-
-    mov     ah, 05h
-    mov     al, [page_num]
-    int     10h
+    call    clear_screen
 
     jmp     _start
 
 section .data
 
-page_num            dw 0
+prompt_txt1         dd "Executable to boot is at HTS", 3ah
+prompt_txt1_len     equ 29
+prompt_txt2         dd "How many sect-s it occup. ?", 3ah
+prompt_txt2_len     equ 28
 
-prompt_txt          dd "Booting the sect. at HTS", 3ah, "How many sect-s to load? - ", 0
-prompt_txt_len1     equ 45
-prompt_txt_len2     equ 27
-
-in_start_str        dd ">>> ", 0
+in_start_str        dd ">>> "
 in_start_str_len    equ 4
 
-in_err_txt          dd "It seems like you've inserted incorr. NHTS val-s!", 0
-in_err_txt_len      equ 49
+in_err_txt          dd "Incorr. NHTS val-s!"
+in_err_txt_len      equ 20
 
-; times 510 - ($ - $$) db 0
-; dw 0xAA55
+succ_msg            dd "Press any key..."
+succ_msg_len        equ 16
 
 section .bss
     

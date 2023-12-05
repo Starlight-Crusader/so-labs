@@ -1141,7 +1141,7 @@ section .data
     prompt_start_len     equ 4
 
     test_result          dw 10000
-    pb_segment_len    db 0
+    pb_segment_len       db 0
     
 section .bss
     string              resb 256
