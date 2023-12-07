@@ -4,8 +4,8 @@ section .data
     to_write_str    dd "@@@FAF-211 Arteom KALAMAGHIN###"
     to_write_len    equ $ - to_write_str - 1
 
-    first_track     equ 28  ; 511 = 18 (sectors per track) * 28 + 7
-    first_sector    equ 8   ; 7 -> 8
+    first_track     equ 28  ; 511 = 18 (sectors per track) * 28 + 7  | 511 / 18 (sectors per track)  = 28 + 7
+    first_sector    equ 8   ; 7 -> 8 (because it starts with 1)
 
     last_track      equ 30  ; 540 = 18 (sectors per track) * 30 + 0
     last_sector     equ 1   ; 0 -> 1

@@ -17,5 +17,5 @@ int     13h
 
 jmp     0000h:7e00h
 
-times 510-($-$$) db 0
-dw 0AA55h
+times 510 - ($ - $$) db 0
+dw 0xAA55
