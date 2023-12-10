@@ -3,11 +3,9 @@ org 7e00h
 ; ========================================
 
 section .text
-    global  _start
+    global  start
 
-_start:
-    mov     ah, 00h
-    int     13h
+start:
 
     ; read HTS
 
@@ -15,8 +13,8 @@ _start:
 
     ; print "How many sect-s to load? - "
 
-    mov     si, prompt_txt2
-    mov     cx, prompt_txt2_len
+    mov     si, prompt_str2
+    mov     cx, prompt_str2_len
     call    print_ln
 
     ; read N
@@ -26,34 +24,32 @@ _start:
     call    print_ln
     call    read_input
 
+    mov     ax, 0
+    call    check_num_input
+
+    cmp     byte [operation_flag], 0
+    je      error
+
     ; convert ascii read to an integer
 
     mov     di, nhts
     call    atoi_in_conv
-    mov     bx, 2
-    call    conv_check
 
     ; read RAM
 
-    ; call    read_ram_address
-    ; call    reset_registers
+    call    read_ram_address
 
     ; read the data from floppy
 
-    mov     ah, 00h
-    int     13h
+    mov     es, [address + 0]
+    mov     bx, [address + 2]
 
-    mov     ax, 0000h
-    mov     es, ax
-    mov     dword [addr_offset], 33280
-    mov     bx, [addr_offset]
-
-    mov     dl, 0
     mov     al, [nhts + 0]
+    mov     dl, 0
     mov     dh, [nhts + 2]
     mov     ch, [nhts + 4]
     mov     cl, [nhts + 6]
-    
+
     mov     ah, 02h
     int     13h
 
@@ -76,18 +72,12 @@ _start:
 
     cmp     ax, 0x5355
     jne     wrong_in_error
- 
-    mov     si, succ_msg
-    mov     cx, succ_msg_len
-    call    print_ln
-
-    mov     ah, 00h
-    int     16h
+    
+    call    wait_for_keypress
 
     call    clear_screen
 
-    mov     bx, [addr_offset]
-    push    bx
+    push    word [address + 2]
     ret
 
 ; ========================================
@@ -239,15 +229,75 @@ atoh_in_conv:
     atoh_conv_done:
         ret
 
+; ----------------------------------------
+
+check_num_input:
+    mov     si, input_buffer
+    mov     byte [operation_flag], 1
+
+    check_char_loop:
+        cmp     byte [si], 00h
+        je      check_input_approved
+
+        check_char_block:
+
+            check_digits:
+                cmp     byte [si], 30h
+                jl      check_input_denied
+
+                cmp     byte [si], 39h
+                jle     char_approved
+
+                cmp     ax, 1
+                je      check_letters
+
+                jmp     check_input_denied
+
+            check_letters:
+                cmp     byte [si], 41h
+                jl      check_input_denied
+
+                cmp     byte [si], 46h
+                jg      check_input_denied
+
+            char_approved:
+                inc     si
+                jmp     check_char_loop
+
+    check_input_denied:
+        mov     byte [operation_flag], 0
+
+    check_input_approved:
+        ret
+
 ; ========================================
 
 read_hts_address:
     
-    ; print "Booting the sect. at HTS (one val. per line)"
+    ; print "Booting the sect. at HTS ..."
 
-    mov     si, prompt_txt1
-    mov     cx, prompt_txt1_len
+    mov     si, prompt_str1
+    mov     cx, prompt_str1_len
     call    print_ln
+
+    mov     cx, 1
+
+    read_hts_address_loop:
+
+        ; read user input (h)
+
+        mov     si, in_start_str
+        push    cx
+        mov     cx, in_start_str_len
+        call    print_ln
+        call    read_input
+
+        pop     cx
+        push    cx
+        imul    cx, 2
+
+        mov     di, nhts
+        add     di, 
 
     ; read user input (h)
 
@@ -260,8 +310,6 @@ read_hts_address:
 
     mov     di, nhts + 2
     call    atoi_in_conv
-    mov     bx, 0
-    call    conv_check
 
     ; read user input (t)
 
@@ -274,8 +322,6 @@ read_hts_address:
 
     mov     di, nhts + 4
     call    atoi_in_conv
-    mov     bx, 0
-    call    conv_check
 
     ; read user input (s)
 
@@ -288,17 +334,16 @@ read_hts_address:
 
     mov     di, nhts + 6
     call    atoi_in_conv
-    mov     bx, 4
-    call    conv_check
 
-    ret
+    read_hts_address_end:
+        ret
 
 read_ram_address:
 
     ; print "At which RAM address..."
 
-    mov     si, prompt_txt3
-    mov     cx, prompt_txt3_len
+    mov     si, prompt_str3
+    mov     cx, prompt_str3_len
     call    print_ln
 
     ; read user input (offset)
@@ -310,10 +355,8 @@ read_ram_address:
 
     ; convert ascii read to a hex
 
-    mov     di, addr_offset
+    mov     di, address + 2
     call    atoh_in_conv
-    mov     bx, 33280
-    call    conv_check
 
     ret
 
@@ -386,56 +429,63 @@ ret_cursor:
 
 ; ----------------------------------------
 
+wait_for_keypress:
+    mov     si, pak_msg
+    mov     cx, pak_msg_len
+    call    print_ln
+
+    mov     ah, 00h
+    int     16h
+
+    ret
+
+; ========================================
+
 wrong_in_error:
 
     ; print the error msg.
 
-    mov     si, in_err_txt
-    mov     cx, in_err_txt_len
+    mov     si, in_err_msg
+    mov     cx, in_err_msg_len
     call    print_ln
 
-    jmp     _terminate
+    jmp     terminate
 
-; ----------------------------------------
+error:
+    call    get_cursor_pos
 
-conv_check:
-    mov     ah, 0eh
-    mov     al, 20h
+    xor     ax, ax
+    mov     es, ax
+    mov     bp, err_msg
+
+    mov     cx, err_msg_len
+    mov     bl, 07h
+
+    mov     ax, 1301h
     int     10h
 
-    mov     ah, 0eh
-    mov     al, 3eh
-    int     10h
+    jmp     terminate
 
-    mov     ah, 0eh
-    mov     al, 3eh
-    int     10h
+; ========================================
 
-    mov     ah, 0eh
-    mov     al, 20h
-    int     10h
+reset_memory:
+    mov     ah, 00h
+    int     13h
 
-    mov     ax, [di]
+    mov     word [nhts + 0], 0000h
+    mov     word [nhts + 2], 0000h
+    mov     word [nhts + 4], 0000h
+    mov     word [nhts + 6], 0000h
 
-    xor     ax, bx
-    jnz     incorrect
+    mov     word [address + 0], 0000h
+    mov     word [address + 2], 0000h
 
-    correct:
-        mov     ah, 0eh
-        mov     al, 31h
-        int     10h
+    mov     word [input_buffer + 0], 0000h
+    mov     word [input_buffer + 2], 0000h
 
-        jmp     check_end
+    call    reset_registers
 
-    incorrect:
-        mov     ah, 0eh
-        mov     al, 30h
-        int     10h
-
-    check_end:
-        ret
-
-; ----------------------------------------
+    ret
 
 reset_registers:
     xor     ax, ax
@@ -451,48 +501,44 @@ reset_registers:
 
 ; ========================================
 
-_terminate:
-    mov     word [nhts + 0], 0
-    mov     word [nhts + 2], 0
-    mov     word [nhts + 4], 0
-    mov     word [nhts + 6], 0
-
-    mov     dword [addr_offset], 0
-
-    ; wait for any key to be pressed
-
-    mov     ah, 00h
-    int     16h
+terminate:
+    call    wait_for_keypress
 
     call    clear_screen
+    call    reset_memory
+    xor     sp, sp
 
-    jmp     _start
+    jmp     start
 
 ; ========================================
 
 section .data
 
-addr_offset         dd 0
+prompt_str1         db "Executable to boot is at HTS:"
+prompt_str1_len     equ 29
 
-prompt_txt1         dd "Executable to boot is at HTS:"
-prompt_txt1_len     equ 29
+prompt_str2         db "How many sectors does it occupy:"
+prompt_str2_len     equ 32
 
-prompt_txt2         dd "How many sectors does it occupy:"
-prompt_txt2_len     equ 32
+prompt_str3         db "At which RAM address (0000:OFFSET) to load the kernel:"
+prompt_str3_len     equ 54
 
-prompt_txt3         dd "At which RAM address (0000:OFFSET, a part of adress per input line):"
-prompt_txt3_len     equ 68
-
-in_start_str        dd ">>> "
+in_start_str        db ">>> "
 in_start_str_len    equ 4
 
-in_err_txt          dd "Incorr. NHTS val-s!"
-in_err_txt_len      equ 20
+in_err_msg          db "Incorr. NHTS / RAM val-s inserted!"
+in_err_msg_len      equ 34
 
-succ_msg            dd "Press any key..."
-succ_msg_len        equ 16
+pak_msg             db "Press any key to continue..."
+pak_msg_len         equ 28
+
+err_msg             db " >> ERR", 00h
+err_msg_len         equ 7
+
+operation_flag      db 0
 
 section .bss
     
 input_buffer    resb 4
+address         resb 4
 nhts            resb 8
