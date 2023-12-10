@@ -3,9 +3,9 @@ org 8200h
 ; ==============================
 
 section .text
-    global  _start
+    global  start
 
-_start:
+start:
     call    break_line_for_input
     call    read_input
 
@@ -47,6 +47,17 @@ _start:
     cmp     byte [command], 0
     jne     command_identified
 
+    ; check 'exit'
+
+    mov     si, input_buffer
+    mov     di, exit_command_name
+    mov     dx, exit_name_len
+    mov     byte [command], 4
+    call    check_command
+
+    cmp     byte [command], 0
+    jne     command_identified
+
     ; if went through the entire list of known-s ...
 
     jmp     unknown_err_display
@@ -55,7 +66,7 @@ _start:
         call    interpret_command
 
     cli_cycle_end:
-        jmp     _terminate
+        jmp     terminate
 
 ; ------------------------------
 
@@ -200,6 +211,9 @@ interpret_command:
     cmp     byte [command], 3
     je      interpret_clear
 
+    cmp     byte [command], 4
+    je      interpret_exit
+
     jmp     interpretation_end
 
     interpret_about:
@@ -256,6 +270,13 @@ interpret_command:
         call    clear_screen
 
         jmp     interpretation_end
+
+    interpret_exit:
+        call    clear_screen
+
+        pop     sp
+        push    7e00h
+        ret
 
     interpretation_end:
         ret
@@ -321,7 +342,7 @@ unknown_err_display:
     mov     cx, error_string_len
     call    print_str
 
-    jmp     _terminate
+    jmp     terminate
 
 ; ------------------------------
 
@@ -401,7 +422,7 @@ break_line_for_input:
 
 ; ------------------------------
 
-_terminate:
+terminate:
     call    get_cursor_pos
 
     cmp     dh, 22
@@ -411,7 +432,7 @@ _terminate:
         call    clear_screen
 
     clear_not_needed:
-        jmp     _start
+        jmp     start
 
 ; ==============================
 
@@ -440,6 +461,11 @@ time_string_len         equ 11
 
 clear_command_name      dd "clear"
 clear_name_len          equ 5
+
+; ------------------------------
+
+exit_command_name       dd "exit"
+exit_name_len           equ 4
 
 ; ------------------------------
 

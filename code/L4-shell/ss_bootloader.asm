@@ -6,10 +6,15 @@ section .text
     global  start
 
 start:
+    call    reset_memory
+    xor     sp, sp
 
     ; read HTS
 
     call    read_hts_address
+
+    cmp     byte [operation_flag], 0
+    je      error
 
     ; print "How many sect-s to load? - "
 
@@ -39,6 +44,9 @@ start:
 
     call    read_ram_address
 
+    cmp     byte [operation_flag], 0
+    je      error
+
     ; read the data from floppy
 
     mov     es, [address + 0]
@@ -56,7 +64,7 @@ start:
     ; check the first 2 bytes for the sequence (0xE8E8)
 
     mov     ax, [es:bx]
-    cmp     ax, 0xE8E8
+    cmp     ax, 0x0FE8
     jne     wrong_in_error
 
     ; check the last 2 bytes for the signature (0x5355)
@@ -74,10 +82,10 @@ start:
     jne     wrong_in_error
     
     call    wait_for_keypress
-
     call    clear_screen
 
-    push    word [address + 2]
+    mov     si, [address + 2]
+    push    si
     ret
 
 ; ========================================
@@ -280,60 +288,39 @@ read_hts_address:
     mov     cx, prompt_str1_len
     call    print_ln
 
-    mov     cx, 1
+    mov     word [mp_16bit_counter], 1
 
     read_hts_address_loop:
 
         ; read user input (h)
 
         mov     si, in_start_str
-        push    cx
         mov     cx, in_start_str_len
         call    print_ln
         call    read_input
 
-        pop     cx
-        push    cx
-        imul    cx, 2
+        ; check the input
+
+        mov     ax, 0
+        call    check_num_input
+
+        cmp     byte [operation_flag], 0
+        je      read_hts_address_end
+
+        ; convert 
 
         mov     di, nhts
-        add     di, 
+        mov     cx, [mp_16bit_counter]
+        imul    cx, 2
+        add     di, cx
+        call    atoi_in_conv
 
-    ; read user input (h)
+        ; ----------
 
-    mov     si, in_start_str
-    mov     cx, in_start_str_len
-    call    print_ln
-    call    read_input
+        inc     word [mp_16bit_counter]
 
-    ; convert ascii read to an integer
-
-    mov     di, nhts + 2
-    call    atoi_in_conv
-
-    ; read user input (t)
-
-    mov     si, in_start_str
-    mov     cx, in_start_str_len
-    call    print_ln
-    call    read_input
-
-    ; convert ascii read to an integer
-
-    mov     di, nhts + 4
-    call    atoi_in_conv
-
-    ; read user input (s)
-
-    mov     si, in_start_str
-    mov     cx, in_start_str_len
-    call    print_ln
-    call    read_input
-
-    ; convert ascii read to an integer
-
-    mov     di, nhts + 6
-    call    atoi_in_conv
+        cmp     word [mp_16bit_counter], 3
+        jle     read_hts_address_loop
 
     read_hts_address_end:
         ret
@@ -353,12 +340,21 @@ read_ram_address:
     call    print_ln
     call    read_input
 
+    ; check the input
+
+    mov     ax, 1
+    call    check_num_input
+
+    cmp     byte [operation_flag], 0
+    je      read_ram_address_end
+
     ; convert ascii read to a hex
 
     mov     di, address + 2
     call    atoh_in_conv
 
-    ret
+    read_ram_address_end:
+        ret
 
 ; ========================================
 
@@ -505,8 +501,6 @@ terminate:
     call    wait_for_keypress
 
     call    clear_screen
-    call    reset_memory
-    xor     sp, sp
 
     jmp     start
 
@@ -536,6 +530,7 @@ err_msg             db " >> ERR", 00h
 err_msg_len         equ 7
 
 operation_flag      db 0
+mp_16bit_counter    dw 0
 
 section .bss
     
