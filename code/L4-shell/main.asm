@@ -1,9 +1,9 @@
-org 8200h
-
-; ==============================
-
 section .text
-    global  start
+
+mov     word [kernel_origin + 0], 0000h
+mov     word [kernel_origin + 2], 0000h
+
+mov     word [kernel_origin + 2], si
 
 start:
     call    break_line_for_input
@@ -18,6 +18,7 @@ start:
 
     mov     si, input_buffer
     mov     di, about_command_name
+    add     di, word [kernel_origin + 2]
     mov     dx, about_name_len
     mov     byte [command], 1
     call    check_command
@@ -29,6 +30,7 @@ start:
 
     mov     si, input_buffer
     mov     di, time_command_name
+    add     di, word [kernel_origin + 2]
     mov     dx, time_name_len
     mov     byte [command], 2
     call    check_command
@@ -40,6 +42,7 @@ start:
     
     mov     si, input_buffer
     mov     di, clear_command_name
+    add     di, word [kernel_origin + 2]
     mov     dx, clear_name_len
     mov     byte [command], 3
     call    check_command
@@ -51,6 +54,7 @@ start:
 
     mov     si, input_buffer
     mov     di, exit_command_name
+    add     di, word [kernel_origin + 2]
     mov     dx, exit_name_len
     mov     byte [command], 4
     call    check_command
@@ -218,6 +222,7 @@ interpret_command:
 
     interpret_about:
         mov     si, about_string
+        add     si, word [kernel_origin + 2]
         mov     cx, about_string_len
         call    print_str
 
@@ -257,6 +262,7 @@ interpret_command:
         call    bcd_to_ascii
 
         mov     si, time_string
+        add     si, word [kernel_origin + 2]
         mov     cx, time_string_len
         call    print_str
 
@@ -339,6 +345,7 @@ print_str:
 
 unknown_err_display:
     mov     si, error_string
+    add     si, word [kernel_origin + 2]
     mov     cx, error_string_len
     call    print_str
 
@@ -394,6 +401,7 @@ break_line:
     xor     ax, ax
     mov     es, ax
     mov     bp, in_start_str
+    add     bp, word [kernel_origin + 2]
 
     mov     bl, 07h
     mov     cx, 1
@@ -411,6 +419,7 @@ break_line_for_input:
     xor     ax, ax
     mov     es, ax
     mov     bp, in_start_str
+    add     bp, word [kernel_origin + 2]
 
     mov     bl, 07h
     mov     cx, in_start_str_len
@@ -438,51 +447,50 @@ terminate:
 
 section .data
 
-in_start_str            dd " >>> "
+in_start_str            db " >>> "
 in_start_str_len        equ 5
 
 ; ------------------------------
     
-about_command_name      dd "about"
+about_command_name      db "about"
 about_name_len          equ 5
     
-about_string            dd "Developed by Kalamaghin Arteom FAF-211"
+about_string            db "Developed by Kalamaghin Arteom FAF-211"
 about_string_len        equ 38
 
 ; ------------------------------
 
-time_command_name       dd "datetime"
+time_command_name       db "datetime"
 time_name_len           equ 8
 
-time_string             dd "CMOS RTC - "
+time_string             db "CMOS RTC - "
 time_string_len         equ 11
 
 ; ------------------------------
 
-clear_command_name      dd "clear"
+clear_command_name      db "clear"
 clear_name_len          equ 5
 
 ; ------------------------------
 
-exit_command_name       dd "exit"
+exit_command_name       db "exit"
 exit_name_len           equ 4
 
 ; ------------------------------
 
-error_string            dd "Unknown command!"
+error_string            db "Unknown command!"
 error_string_len        equ 16
-
-; ------------------------------
-
-command                 db 0
-
-hours                   db 0
-minutes                 db 0
-seconds                 db 0
 
 ; ==============================
 
 section .bss
 
+command             resb 1
+
+hours               resb 1
+minutes             resb 1
+seconds             resb 1
+
+kernel_origin       resb 4
 input_buffer        resb 256
 dt_ascii_buffer     resb 16

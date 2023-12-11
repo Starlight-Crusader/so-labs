@@ -3,7 +3,6 @@ org 7e00h
 ; ========================================
 
 section .text
-    global  start
 
 start:
     call    reset_memory
@@ -64,7 +63,7 @@ start:
     ; check the first 2 bytes for the sequence (0xE8E8)
 
     mov     ax, [es:bx]
-    cmp     ax, 0x0FE8
+    cmp     ax, 0x06C7
     jne     wrong_in_error
 
     ; check the last 2 bytes for the signature (0x5355)
