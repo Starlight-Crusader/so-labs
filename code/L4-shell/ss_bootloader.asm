@@ -519,8 +519,8 @@ prompt_str3_len     equ 54
 in_start_str        db ">>> "
 in_start_str_len    equ 4
 
-in_err_msg          db "Incorr. NHTS / RAM val-s inserted!"
-in_err_msg_len      equ 34
+in_err_msg          db "Incorr. NHTS val-s inserted!"
+in_err_msg_len      equ 28
 
 pak_msg             db "Press any key to continue..."
 pak_msg_len         equ 28

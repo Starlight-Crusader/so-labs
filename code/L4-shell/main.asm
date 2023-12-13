@@ -93,6 +93,9 @@ read_input:
 	    cmp     al, 0dh
 	    je      hdl_enter
 
+        cmp     al, 20h
+        je      typing
+
         ; prevent program form hading more than 256 characters
 
         cmp     si, input_buffer + 256
