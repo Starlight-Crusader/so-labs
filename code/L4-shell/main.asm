@@ -3,7 +3,8 @@ section .text
 mov     word [kernel_origin + 0], 0000h
 mov     word [kernel_origin + 2], 0000h
 
-mov     word [kernel_origin + 2], si
+mov     word [kernel_origin + 0], ax
+mov     word [kernel_origin + 2], bx
 
 start:
     call    break_line_for_input
@@ -334,8 +335,7 @@ print_str:
 
     call    get_cursor_pos
 
-    xor     ax, ax
-    mov     es, ax
+    mov     es, [kernel_origin + 0]
     mov     bp, si
 
     mov     bl, 07h
@@ -401,10 +401,9 @@ break_line:
     inc     dh
     mov     dl, 0
 
-    xor     ax, ax
-    mov     es, ax
+    mov     es, [kernel_origin + 0]
     mov     bp, in_start_str
-    add     bp, word [kernel_origin + 2]
+    add     bp, [kernel_origin + 2]
 
     mov     bl, 07h
     mov     cx, 1
@@ -419,10 +418,9 @@ break_line_for_input:
     inc     dh
     mov     dl, 0
 
-    xor     ax, ax
-    mov     es, ax
+    mov     es, [kernel_origin + 0]
     mov     bp, in_start_str
-    add     bp, word [kernel_origin + 2]
+    add     bp, [kernel_origin + 2]
 
     mov     bl, 07h
     mov     cx, in_start_str_len

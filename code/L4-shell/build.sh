@@ -2,14 +2,14 @@
 
 rm -f floppy.img
 
-nasm -f bin -o fs_bootloader.com fs_bootloader.asm
-truncate -s 1474560 fs_bootloader.com
-mv fs_bootloader.com floppy.img
+nasm -f bin -o 1s_bootloader.com 1s_bootloader.asm
+truncate -s 1474560 1s_bootloader.com
+mv 1s_bootloader.com floppy.img
 
-nasm -f bin -o ss_bootloader.com ss_bootloader.asm
-dd if=ss_bootloader.com of=floppy.img bs=512 count=2 seek=1 conv=notrunc
+nasm -f bin -o 2s_bootloader.com 2s_bootloader.asm
+dd if=2s_bootloader.com of=floppy.img bs=512 count=2 seek=1 conv=notrunc
 echo -n -e '\x46\x46' | dd of=floppy.img bs=1 count=2 seek=1534 conv=notrunc
-rm -f ss_bootloader.com
+rm -f 2s_bootloader.com
 
 nasm -f bin -o main.com main.asm
 dd if=main.com of=floppy.img bs=512 count=2 seek=1015 conv=notrunc

@@ -83,9 +83,13 @@ start:
     call    wait_for_keypress
     call    clear_screen
 
-    mov     si, [address + 2]
-    push    si
-    ret
+    mov     ds, [address + 0]
+    mov     si, address + 2
+
+    mov     ax, [address + 0]
+    mov     bx, [address + 2]
+
+    jmp     [si]
 
 ; ========================================
 
@@ -332,25 +336,39 @@ read_ram_address:
     mov     cx, prompt_str3_len
     call    print_ln
 
-    ; read user input (offset)
+    mov     word [mp_16bit_counter], 0
 
-    mov     si, in_start_str
-    mov     cx, in_start_str_len
-    call    print_ln
-    call    read_input
+    read_ram_address_loop:
 
-    ; check the input
+        ; read user input (h)
 
-    mov     ax, 1
-    call    check_num_input
+        mov     si, in_start_str
+        mov     cx, in_start_str_len
+        call    print_ln
+        call    read_input
 
-    cmp     byte [operation_flag], 0
-    je      read_ram_address_end
+        ; check the input
 
-    ; convert ascii read to a hex
+        mov     ax, 1
+        call    check_num_input
 
-    mov     di, address + 2
-    call    atoh_in_conv
+        cmp     byte [operation_flag], 0
+        je      read_ram_address_end
+
+        ; convert 
+
+        mov     di, address
+        mov     cx, [mp_16bit_counter]
+        imul    cx, 2
+        add     di, cx
+        call    atoh_in_conv
+
+        ; ----------
+
+        inc     word [mp_16bit_counter]
+
+        cmp     word [mp_16bit_counter], 1
+        jle     read_ram_address_loop
 
     read_ram_address_end:
         ret
@@ -513,8 +531,8 @@ prompt_str1_len     equ 29
 prompt_str2         db "How many sectors does it occupy:"
 prompt_str2_len     equ 32
 
-prompt_str3         db "At which RAM address (0000:OFFSET) to load the kernel:"
-prompt_str3_len     equ 54
+prompt_str3         db "At which RAM address (SEGM:OFFS, a part per line) to load the kernel:"
+prompt_str3_len     equ 69
 
 in_start_str        db ">>> "
 in_start_str_len    equ 4
